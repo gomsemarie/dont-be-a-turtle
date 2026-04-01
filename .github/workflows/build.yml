@@ -12,6 +12,7 @@ permissions:
 jobs:
   build-backend:
     strategy:
+      fail-fast: false
       matrix:
         include:
           - os: macos-latest
@@ -47,6 +48,7 @@ jobs:
   build-desktop:
     needs: build-backend
     strategy:
+      fail-fast: false
       matrix:
         include:
           - os: macos-latest
@@ -96,6 +98,7 @@ jobs:
         run: pnpm --filter @faceguard/desktop ${{ matrix.build_cmd }}
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          CSC_IDENTITY_AUTO_DISCOVERY: false
 
       - name: Upload release artifacts
         uses: actions/upload-artifact@v4
