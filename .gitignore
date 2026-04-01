@@ -54,6 +54,3 @@ pnpm-debug.log*
 
 # Misc
 *.tsbuildinfo
-
-# Temp files
-_tmp_*
