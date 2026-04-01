@@ -1,0 +1,138 @@
+name: Build & Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build-backend:
+    strategy:
+      matrix:
+        include:
+          - os: macos-latest
+            platform: mac
+          - os: windows-latest
+            platform: win
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install Python dependencies
+        working-directory: apps/backend
+        run: |
+          pip install -r requirements.txt
+          pip install pyinstaller
+          pip uninstall matplotlib -y || true
+
+      - name: Build backend with PyInstaller
+        working-directory: apps/backend
+        run: python -m PyInstaller faceguard-backend.spec --clean --noconfirm
+
+      - name: Upload backend artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-${{ matrix.platform }}
+          path: apps/backend/dist/faceguard-backend/
+          retention-days: 1
+
+  build-desktop:
+    needs: build-backend
+    strategy:
+      matrix:
+        include:
+          - os: macos-latest
+            platform: mac
+            build_cmd: dist:mac
+          - os: windows-latest
+            platform: win
+            build_cmd: dist:win
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - name: Install Node dependencies
+        run: pnpm install
+
+      - name: Download backend artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: backend-${{ matrix.platform }}
+          path: apps/backend/dist/faceguard-backend/
+
+      - name: Set backend binary executable (macOS)
+        if: matrix.platform == 'mac'
+        run: chmod +x apps/backend/dist/faceguard-backend/faceguard-backend
+
+      - name: Build UI
+        run: pnpm --filter @faceguard/ui build
+
+      - name: Copy UI to desktop
+        shell: bash
+        run: |
+          rm -rf apps/desktop/ui
+          cp -r packages/ui/dist apps/desktop/ui
+
+      - name: Build Electron TypeScript
+        run: pnpm --filter @faceguard/desktop build
+
+      - name: Package with electron-builder
+        run: pnpm --filter @faceguard/desktop ${{ matrix.build_cmd }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Upload release artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-${{ matrix.platform }}
+          path: |
+            release/*.dmg
+            release/*.exe
+            release/*.blockmap
+            release/*.yml
+          retention-days: 7
+
+  release:
+    needs: build-desktop
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download macOS artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: release-mac
+          path: release/
+
+      - name: Download Windows artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: release-win
+          path: release/
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            release/*.dmg
+            release/*.exe
+          generate_release_notes: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

@@ -1,0 +1,19 @@
+{
+  "name": "faceguard",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Face distance warning system - Protect your eyes",
+  "scripts": {
+    "dev": "pnpm --filter @faceguard/desktop dev",
+    "dev:ui": "pnpm --filter @faceguard/ui dev",
+    "dev:backend": "cd apps/backend && python main.py",
+    "build": "node scripts/build.js",
+    "build:ui": "pnpm --filter @faceguard/ui build",
+    "build:backend": "node scripts/build-backend.js",
+    "build:desktop": "pnpm --filter @faceguard/desktop build"
+  },
+  "engines": {
+    "node": ">=18",
+    "pnpm": ">=8"
+  }
+}

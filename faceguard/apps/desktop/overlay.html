@@ -1,0 +1,490 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8" />
+  <title>거북이 키우기 Warning Overlay</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    html, body {
+      width: 100vw;
+      height: 100vh;
+      overflow: hidden;
+      background: transparent;
+      pointer-events: none;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    }
+
+    /* ─── Level 1 - Caution: bold top/bottom bars ─── */
+    .warning-bar-top, .warning-bar-bottom {
+      position: fixed;
+      left: 0;
+      right: 0;
+      height: 8px;
+      opacity: 0;
+      transition: opacity 0.2s ease, height 0.2s ease;
+      z-index: 9998;
+    }
+    .warning-bar-top { top: 0; background: linear-gradient(180deg, #eab308 0%, transparent 100%); }
+    .warning-bar-bottom { bottom: 0; background: linear-gradient(0deg, #eab308 0%, transparent 100%); }
+    .warning-bar-top.active, .warning-bar-bottom.active {
+      opacity: 1;
+      height: 16px;
+      animation: flash-bar 1s ease-in-out infinite;
+    }
+
+    /* ─── Level 2 - Warning: thick glowing border ─── */
+    .warning-border {
+      position: fixed;
+      top: 0; left: 0; right: 0; bottom: 0;
+      opacity: 0;
+      transition: opacity 0.2s ease;
+      z-index: 9997;
+      pointer-events: none;
+    }
+    .warning-border.active {
+      opacity: 1;
+      box-shadow:
+        inset 0 0 120px rgba(249, 115, 22, 0.5),
+        inset 0 0 60px rgba(249, 115, 22, 0.3),
+        inset 0 0 20px rgba(249, 115, 22, 0.2);
+      animation: flash-border 0.8s ease-in-out infinite;
+    }
+
+    /* ─── Level 3 - Danger: full screen red + big warning ─── */
+    .warning-overlay {
+      position: fixed;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background: radial-gradient(ellipse at center, rgba(239, 68, 68, 0.15) 0%, rgba(239, 68, 68, 0.4) 100%);
+      opacity: 0;
+      transition: opacity 0.2s ease;
+      z-index: 9996;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      pointer-events: none;
+    }
+    .warning-overlay.active {
+      opacity: 1;
+      animation: flash-overlay 0.6s ease-in-out infinite;
+    }
+    .warning-overlay .message-box {
+      background: rgba(220, 38, 38, 0.95);
+      color: white;
+      padding: 28px 48px;
+      border-radius: 20px;
+      text-align: center;
+      transform: scale(0.8);
+      opacity: 0;
+      transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+      box-shadow: 0 0 60px rgba(239, 68, 68, 0.6), 0 20px 40px rgba(0,0,0,0.3);
+    }
+    .warning-overlay.active .message-box {
+      transform: scale(1);
+      opacity: 1;
+    }
+    .message-box .icon { font-size: 48px; margin-bottom: 8px; }
+    .message-box .title { font-size: 28px; font-weight: 800; letter-spacing: -0.5px; }
+    .message-box .subtitle { font-size: 16px; font-weight: 400; margin-top: 8px; opacity: 0.9; }
+
+    /* ─── Break reminder ─── */
+    .break-reminder {
+      position: fixed;
+      top: 50%; left: 50%;
+      transform: translate(-50%, -50%) scale(0.8);
+      background: rgba(37, 99, 235, 0.95);
+      color: white;
+      padding: 32px 48px;
+      border-radius: 20px;
+      text-align: center;
+      opacity: 0;
+      transition: all 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+      z-index: 9999;
+      pointer-events: none;
+      box-shadow: 0 20px 60px rgba(37, 99, 235, 0.4);
+    }
+    .break-reminder.active {
+      opacity: 1;
+      transform: translate(-50%, -50%) scale(1);
+    }
+    .break-reminder .icon { font-size: 48px; }
+    .break-reminder .title { font-size: 24px; font-weight: 700; margin-top: 8px; }
+    .break-reminder .subtitle { font-size: 15px; font-weight: 400; margin-top: 8px; opacity: 0.85; }
+
+    /* ─── Posture alert ─── */
+    .posture-alert {
+      position: fixed;
+      bottom: 80px; left: 50%;
+      transform: translateX(-50%) translateY(20px);
+      background: rgba(147, 51, 234, 0.95);
+      color: white;
+      padding: 14px 28px;
+      border-radius: 14px;
+      font-size: 16px;
+      font-weight: 600;
+      opacity: 0;
+      transition: all 0.3s ease;
+      z-index: 9999;
+      pointer-events: none;
+      box-shadow: 0 10px 30px rgba(147, 51, 234, 0.3);
+    }
+    .posture-alert.active {
+      opacity: 1;
+      transform: translateX(-50%) translateY(0);
+    }
+
+    /* ─── Celebration overlay ─── */
+    .celebration {
+      position: fixed;
+      top: 0; left: 0; right: 0; bottom: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      opacity: 0;
+      transition: opacity 0.4s ease;
+      z-index: 10000;
+      pointer-events: none;
+    }
+    .celebration.active { opacity: 1; }
+    .celebration.fade-out { opacity: 0; transition: opacity 0.5s ease; }
+
+    .celebration .backdrop {
+      position: absolute;
+      top: 0; left: 0; right: 0; bottom: 0;
+    }
+
+    .celebration .border-frame {
+      position: absolute;
+      top: 12px; left: 12px; right: 12px; bottom: 12px;
+      border-radius: 16px;
+      border: 3px solid rgba(255,255,255,0.5);
+      animation: cel-pulse 1.2s ease-in-out infinite;
+    }
+
+    .celebration .content {
+      position: relative;
+      text-align: center;
+      z-index: 1;
+    }
+
+    .celebration .direction {
+      font-size: 18px;
+      font-weight: 800;
+      margin-bottom: 12px;
+      text-shadow: 0 2px 8px rgba(0,0,0,0.3);
+    }
+
+    .celebration .emoji {
+      font-size: 120px;
+      line-height: 1;
+      margin-bottom: 16px;
+      animation: cel-bounce 0.7s cubic-bezier(0.34, 1.56, 0.64, 1);
+    }
+
+    .celebration .rank-name {
+      font-size: 36px;
+      font-weight: 900;
+      letter-spacing: -1px;
+      margin-bottom: 6px;
+      text-shadow: 0 2px 12px rgba(0,0,0,0.4);
+    }
+
+    .celebration .level-badge {
+      display: inline-block;
+      font-size: 14px;
+      font-family: monospace;
+      padding: 4px 12px;
+      border-radius: 999px;
+      margin-bottom: 12px;
+    }
+
+    .celebration .description {
+      font-size: 16px;
+      color: rgba(255,255,255,0.85);
+      max-width: 400px;
+      margin: 0 auto;
+    }
+
+    .celebration .warn-msg {
+      font-size: 14px;
+      font-weight: 700;
+      margin-top: 12px;
+    }
+
+    /* Particles */
+    .celebration .particles {
+      position: absolute;
+      top: 0; left: 0; right: 0; bottom: 0;
+      overflow: hidden;
+      pointer-events: none;
+    }
+    .celebration .particle {
+      position: absolute;
+      font-size: 28px;
+      opacity: 0;
+      animation: cel-particle 3s ease-out forwards;
+    }
+
+    @keyframes cel-pulse {
+      0%, 100% { opacity: 0.4; transform: scale(1); }
+      50% { opacity: 0.8; transform: scale(1.003); }
+    }
+    @keyframes cel-bounce {
+      0% { transform: scale(0.2) rotate(-15deg); opacity: 0; }
+      50% { transform: scale(1.15) rotate(5deg); opacity: 1; }
+      100% { transform: scale(1) rotate(0deg); opacity: 1; }
+    }
+    @keyframes cel-particle {
+      0% { opacity: 1; transform: translateY(0) scale(1); }
+      100% { opacity: 0; transform: translateY(-300px) scale(0.5) rotate(180deg); }
+    }
+
+    /* ─── Animations ─── */
+    @keyframes flash-bar {
+      0%, 100% { opacity: 0.6; }
+      50% { opacity: 1; }
+    }
+    @keyframes flash-border {
+      0%, 100% { opacity: 0.5; }
+      50% { opacity: 1; }
+    }
+    @keyframes flash-overlay {
+      0%, 100% { opacity: 0.6; }
+      50% { opacity: 1; }
+    }
+  </style>
+</head>
+<body>
+  <div class="warning-bar-top" id="barTop"></div>
+  <div class="warning-bar-bottom" id="barBottom"></div>
+  <div class="warning-border" id="warningBorder"></div>
+  <div class="warning-overlay" id="warningOverlay">
+    <div class="message-box">
+      <div class="icon">⚠️</div>
+      <div class="title">너무 가까워요!</div>
+      <div class="subtitle">모니터에서 떨어져 주세요</div>
+    </div>
+  </div>
+  <div class="break-reminder" id="breakReminder">
+    <div class="icon">☕</div>
+    <div class="title">휴식 시간이에요</div>
+    <div class="subtitle">잠시 눈을 쉬어주세요</div>
+  </div>
+  <div class="posture-alert" id="postureAlert">
+    🧘 자세를 바르게 해주세요
+  </div>
+  <div class="celebration" id="celebration">
+    <div class="backdrop" id="celBackdrop"></div>
+    <div class="border-frame" id="celBorder"></div>
+    <div class="particles" id="celParticles"></div>
+    <div class="content">
+      <div class="direction" id="celDirection"></div>
+      <div class="emoji" id="celEmoji"></div>
+      <div class="rank-name" id="celName"></div>
+      <div class="level-badge" id="celBadge"></div>
+      <div class="description" id="celDesc"></div>
+      <div class="warn-msg" id="celWarn"></div>
+    </div>
+  </div>
+
+  <script>
+    const barTop = document.getElementById('barTop');
+    const barBottom = document.getElementById('barBottom');
+    const border = document.getElementById('warningBorder');
+    const overlay = document.getElementById('warningOverlay');
+    const breakEl = document.getElementById('breakReminder');
+    const postureEl = document.getElementById('postureAlert');
+
+    let breakTimeout = null;
+    let postureTimeout = null;
+
+    // ─── Audio: generate warning beep using Web Audio API ───
+    const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+
+    function playBeep(freq, duration, volume) {
+      const osc = audioCtx.createOscillator();
+      const gain = audioCtx.createGain();
+      osc.connect(gain);
+      gain.connect(audioCtx.destination);
+      osc.frequency.value = freq;
+      osc.type = 'sine';
+      gain.gain.value = volume;
+      // Fade out
+      gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + duration);
+      osc.start(audioCtx.currentTime);
+      osc.stop(audioCtx.currentTime + duration);
+    }
+
+    let lastSoundTime = 0;
+    let lastSoundLevel = 0;
+
+    function playWarningSound(level) {
+      const now = Date.now();
+      // Throttle: level 1 = every 5s, level 2 = every 3s, level 3 = every 1.5s
+      const intervals = { 1: 5000, 2: 3000, 3: 1500 };
+      const minInterval = intervals[level] || 3000;
+
+      if (now - lastSoundTime < minInterval && lastSoundLevel === level) return;
+      lastSoundTime = now;
+      lastSoundLevel = level;
+
+      if (level === 1) {
+        // Soft single beep
+        playBeep(800, 0.15, 0.15);
+      } else if (level === 2) {
+        // Double beep
+        playBeep(1000, 0.12, 0.25);
+        setTimeout(() => playBeep(1000, 0.12, 0.25), 180);
+      } else if (level === 3) {
+        // Urgent triple beep
+        playBeep(1200, 0.1, 0.4);
+        setTimeout(() => playBeep(1400, 0.1, 0.4), 150);
+        setTimeout(() => playBeep(1600, 0.15, 0.4), 300);
+      }
+    }
+
+    // ─── Warning level control ───
+    window.setWarningLevel = function(level) {
+      console.log('[Overlay] setWarningLevel:', level);
+
+      // Reset all
+      barTop.classList.remove('active');
+      barBottom.classList.remove('active');
+      border.classList.remove('active');
+      overlay.classList.remove('active');
+
+      if (level >= 1) {
+        barTop.classList.add('active');
+        barBottom.classList.add('active');
+      }
+      if (level >= 2) {
+        border.classList.add('active');
+      }
+      if (level >= 3) {
+        overlay.classList.add('active');
+      }
+
+      // Play warning sound
+      if (level > 0) {
+        playWarningSound(level);
+      }
+    };
+
+    window.showBreakReminder = function() {
+      playBeep(600, 0.3, 0.2);
+      setTimeout(() => playBeep(800, 0.3, 0.2), 400);
+      breakEl.classList.add('active');
+      if (breakTimeout) clearTimeout(breakTimeout);
+      breakTimeout = setTimeout(() => {
+        breakEl.classList.remove('active');
+      }, 10000);
+    };
+
+    window.showPostureAlert = function() {
+      playBeep(700, 0.2, 0.15);
+      postureEl.classList.add('active');
+      if (postureTimeout) clearTimeout(postureTimeout);
+      postureTimeout = setTimeout(() => {
+        postureEl.classList.remove('active');
+      }, 5000);
+    };
+
+    // ─── Celebration effect ───
+    const celEl = document.getElementById('celebration');
+    const celBackdrop = document.getElementById('celBackdrop');
+    const celBorder = document.getElementById('celBorder');
+    const celParticles = document.getElementById('celParticles');
+    let celTimeout = null;
+    let celFadeTimeout = null;
+
+    window.showCelebration = function(data) {
+      // data: { direction, emoji, image?, name, level, description, color }
+      const isUp = data.direction === 'up';
+      const color = data.color || '#22c55e';
+
+      // Populate content
+      document.getElementById('celDirection').textContent = isUp ? '⬆️ 칭호 승급!' : '⬇️ 칭호 변경';
+      document.getElementById('celDirection').style.color = color;
+
+      const emojiEl = document.getElementById('celEmoji');
+      if (data.image) {
+        emojiEl.innerHTML = '<img src="' + data.image + '" style="width:160px;height:160px;object-fit:contain;image-rendering:pixelated;filter:drop-shadow(0 0 30px ' + color + '80)" draggable="false" />';
+      } else {
+        emojiEl.innerHTML = '';
+        emojiEl.textContent = data.emoji || '🐢';
+        emojiEl.style.filter = 'drop-shadow(0 0 30px ' + color + '80)';
+      }
+      document.getElementById('celName').textContent = data.name || '';
+      document.getElementById('celName').style.color = color;
+
+      const badge = document.getElementById('celBadge');
+      badge.textContent = 'Lv.' + (data.level || 1);
+      badge.style.backgroundColor = color + '30';
+      badge.style.color = color;
+      badge.style.border = '1px solid ' + color + '50';
+
+      document.getElementById('celDesc').textContent = data.description || '';
+
+      const warn = document.getElementById('celWarn');
+      if (isUp && data.level >= 5) {
+        warn.textContent = '자세 교정이 필요합니다!';
+        warn.style.color = color;
+        warn.style.display = 'block';
+      } else {
+        warn.style.display = 'none';
+      }
+
+      // Backdrop
+      celBackdrop.style.background = 'radial-gradient(circle at center, ' + color + '25 0%, ' + color + '08 50%, transparent 70%)';
+      celBorder.style.borderColor = color + '60';
+
+      // Spawn particles — mix emoji into sparkle particles
+      celParticles.innerHTML = '';
+      const sparkles = ['✨', '🎉', '⭐', '🌟', '💫'];
+      const emoji = data.emoji || '🐢';
+      const particlePool = [...sparkles, emoji, emoji, emoji];
+      for (let i = 0; i < 20; i++) {
+        const p = document.createElement('div');
+        p.className = 'particle';
+        p.textContent = particlePool[Math.floor(Math.random() * particlePool.length)];
+        p.style.left = (Math.random() * 100) + '%';
+        p.style.top = (60 + Math.random() * 40) + '%';
+        p.style.animationDelay = (Math.random() * 1.5) + 's';
+        p.style.animationDuration = (2 + Math.random() * 2) + 's';
+        p.style.fontSize = (20 + Math.random() * 24) + 'px';
+        celParticles.appendChild(p);
+      }
+
+      // Re-trigger bounce animation
+      const bounceEl = document.getElementById('celEmoji');
+      bounceEl.style.animation = 'none';
+      bounceEl.offsetHeight; // reflow
+      bounceEl.style.animation = 'cel-bounce 0.7s cubic-bezier(0.34, 1.56, 0.64, 1)';
+
+      // Show
+      celEl.classList.remove('fade-out');
+      celEl.classList.add('active');
+
+      // Play celebratory sound
+      playBeep(523, 0.15, 0.2);
+      setTimeout(() => playBeep(659, 0.15, 0.2), 150);
+      setTimeout(() => playBeep(784, 0.15, 0.2), 300);
+      setTimeout(() => playBeep(1047, 0.25, 0.25), 450);
+
+      // Fade out at 4.5s, hide at 5.2s
+      if (celTimeout) clearTimeout(celTimeout);
+      if (celFadeTimeout) clearTimeout(celFadeTimeout);
+      celFadeTimeout = setTimeout(() => {
+        celEl.classList.add('fade-out');
+      }, 4500);
+      celTimeout = setTimeout(() => {
+        celEl.classList.remove('active', 'fade-out');
+        celParticles.innerHTML = '';
+      }, 5200);
+    };
+
+    // Initialize hidden
+    window.setWarningLevel(0);
+  </script>
+</body>
+</html>

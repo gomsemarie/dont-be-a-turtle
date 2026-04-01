@@ -1,0 +1,40 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "거북이 키우기 Settings",
+  "type": "object",
+  "properties": {
+    "selected_camera_index": {
+      "type": "integer",
+      "default": 0,
+      "description": "Selected camera device index"
+    },
+    "warning_levels": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "enabled": { "type": "boolean", "default": true },
+          "distance_cm": { "type": "number", "minimum": 10, "maximum": 100 },
+          "label": { "type": "string" }
+        },
+        "required": ["enabled", "distance_cm", "label"]
+      },
+      "minItems": 3,
+      "maxItems": 3
+    },
+    "calibration": {
+      "type": "object",
+      "properties": {
+        "reference_distance_cm": { "type": "number", "default": 50 },
+        "reference_ied_pixels": { "type": "number", "default": 0 },
+        "is_calibrated": { "type": "boolean", "default": false }
+      }
+    },
+    "monitoring_active": { "type": "boolean", "default": false },
+    "frame_rate": { "type": "integer", "minimum": 5, "maximum": 30, "default": 15 },
+    "break_reminder_enabled": { "type": "boolean", "default": true },
+    "break_reminder_interval_min": { "type": "integer", "minimum": 10, "maximum": 120, "default": 50 },
+    "posture_detection_enabled": { "type": "boolean", "default": true },
+    "head_tilt_threshold_deg": { "type": "number", "minimum": 5, "maximum": 30, "default": 15 }
+  }
+}

@@ -1,0 +1,32 @@
+{
+  "selected_camera_index": 0,
+  "warning_levels": [
+    { "enabled": true, "distance_cm": 46.0, "label": "주의" },
+    { "enabled": true, "distance_cm": 43.0, "label": "경고" },
+    { "enabled": true, "distance_cm": 40.0, "label": "위험" }
+  ],
+  "calibration": {
+    "reference_distance_cm": 50.0,
+    "reference_ied_pixels": 0.0,
+    "is_calibrated": false
+  },
+  "monitoring_active": false,
+  "frame_rate": 15,
+  "break_reminder_enabled": true,
+  "break_reminder_interval_min": 50,
+  "posture_detection_enabled": false,
+  "head_tilt_threshold_deg": 15.0,
+  "emoji_mask_enabled": true,
+  "emoji_mask_type": "emoji_smile",
+  "face_yaw_threshold_deg": 45.0,
+  "warning_grace_sec": 3,
+  "notification_enabled": true,
+  "history_retention_days": 30,
+  "history_max_events": 5000,
+  "score_multiplier": 1.0,
+  "warning_messages": [
+    "화면에 조금 가까워요. 적정 거리를 유지해주세요.",
+    "화면에 너무 가까워요! 뒤로 물러나주세요.",
+    "화면에 매우 가까워요! 즉시 거리를 두세요."
+  ]
+}
