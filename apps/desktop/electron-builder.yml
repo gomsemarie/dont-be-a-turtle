@@ -2,6 +2,8 @@ appId: com.faceguard.app
 productName: Dont Be A Turtle
 copyright: Copyright © 2024 Dont Be A Turtle
 
+publish: null
+
 directories:
   output: ../../release
 

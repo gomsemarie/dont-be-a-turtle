@@ -2,6 +2,12 @@
   "name": "@faceguard/desktop",
   "version": "1.0.0",
   "private": true,
+  "description": "Dont Be A Turtle - Face distance warning desktop app",
+  "author": "Dont Be A Turtle",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/ecreditkr/dont-be-a-turtle.git"
+  },
   "main": "dist-electron/main.js",
   "scripts": {
     "dev": "electron .",
