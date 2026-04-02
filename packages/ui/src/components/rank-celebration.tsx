@@ -74,7 +74,7 @@ function RankToastCard({
         <div className="flex-1 min-w-0 text-left">
           <div className="flex items-center gap-1.5 mb-0.5">
             <span className="text-xs font-bold" style={{ color: rank.color }}>
-              {isUp ? "⬆️ 칭호 승급!" : "⬇️ 칭호 변경"}
+              {isUp ? "⬆️ 칭호 상승!" : "⬇️ 칭호 하락"}
             </span>
             <span
               className="text-[9px] font-mono px-1.5 py-px rounded-full"
@@ -83,7 +83,7 @@ function RankToastCard({
                 color: rank.color,
               }}
             >
-              Lv.{rank.level}
+              Rank {rank.level > 0 ? `+${rank.level}` : rank.level}
             </span>
           </div>
           <p className="text-sm font-black truncate" style={{ color: rank.color }}>

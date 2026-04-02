@@ -14,6 +14,7 @@
   "frame_rate": 15,
   "break_reminder_enabled": true,
   "break_reminder_interval_min": 50,
+  "break_chaos_level": 3,
   "posture_detection_enabled": false,
   "head_tilt_threshold_deg": 15.0,
   "emoji_mask_enabled": true,

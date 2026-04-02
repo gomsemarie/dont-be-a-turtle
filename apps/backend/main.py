@@ -6,6 +6,7 @@ import json
 import sys
 import time
 from contextlib import asynccontextmanager
+from pathlib import Path
 from typing import AsyncGenerator
 
 import cv2
@@ -18,8 +19,33 @@ from sse_starlette.sse import EventSourceResponse
 from camera import CameraManager
 from config import AppSettings, CalibrationData, WarningLevel, load_settings, save_settings
 from detector import FaceDetector
+
+
+# ─── Load root config.json ───────────────────────────────────────
+def _load_app_config() -> dict:
+    """Load root config.json for app metadata (version, name, etc.)."""
+    # Search: bundled (PyInstaller), parent dirs from source
+    candidates = []
+    if getattr(sys, 'frozen', False):
+        candidates.append(Path(sys._MEIPASS) / "config.json")
+    src_dir = Path(__file__).parent
+    candidates.extend([
+        src_dir / "config.json",
+        src_dir.parent.parent / "config.json",  # repo root
+    ])
+    for p in candidates:
+        if p.exists():
+            try:
+                return json.loads(p.read_text(encoding="utf-8"))
+            except Exception:
+                continue
+    return {}
+
+_APP_CONFIG = _load_app_config()
+APP_VERSION = _APP_CONFIG.get("app", {}).get("version", "1.2.0")
+APP_NAME = _APP_CONFIG.get("app", {}).get("name", "거북이 키우기")
 from history import WarningHistory
-from turtle_rank import get_full_rank_info, load_ranks, load_scoring_rules, reset_score_state
+from turtle_rank import get_full_rank_info, load_ranks, load_scoring_rules, reset_score_state, add_good_posture_time
 
 
 # Global instances
@@ -63,7 +89,7 @@ async def lifespan(app: FastAPI):
     face_detector.release()
 
 
-app = FastAPI(title="거북이 키우기 Backend", version="1.1.0", lifespan=lifespan)
+app = FastAPI(title=f"{APP_NAME} Backend", version=APP_VERSION, lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
@@ -88,7 +114,7 @@ def _apply_warning_thresholds():
 
 @app.get("/api/health")
 async def health_check():
-    return {"status": "ok", "version": "1.1.0"}
+    return {"status": "ok", "version": APP_VERSION}
 
 
 @app.get("/api/cameras")
@@ -165,6 +191,7 @@ class UpdateSettingsRequest(BaseModel):
     frame_rate: int | None = None
     break_reminder_enabled: bool | None = None
     break_reminder_interval_min: int | None = None
+    break_chaos_level: int | None = None
     posture_detection_enabled: bool | None = None
     head_tilt_threshold_deg: float | None = None
     emoji_mask_enabled: bool | None = None
@@ -190,6 +217,8 @@ async def update_settings(req: UpdateSettingsRequest):
         settings.break_reminder_enabled = req.break_reminder_enabled
     if req.break_reminder_interval_min is not None:
         settings.break_reminder_interval_min = req.break_reminder_interval_min
+    if req.break_chaos_level is not None:
+        settings.break_chaos_level = max(1, min(req.break_chaos_level, 10))
     if req.posture_detection_enabled is not None:
         settings.posture_detection_enabled = req.posture_detection_enabled
     if req.head_tilt_threshold_deg is not None:
@@ -239,6 +268,12 @@ async def stop_monitoring():
     settings.monitoring_active = False
     save_settings(settings)
     return {"success": True}
+
+
+@app.post("/api/break/trigger")
+async def trigger_break():
+    """Manually trigger a break reminder."""
+    return {"success": True, "break_chaos_level": settings.break_chaos_level}
 
 
 @app.get("/api/monitor/status")
@@ -322,7 +357,7 @@ async def get_rank_config():
 @app.get("/api/version")
 async def get_version():
     """Get app version."""
-    return {"version": "1.1.0"}
+    return {"version": APP_VERSION}
 
 
 # ─── SSE Streaming Endpoints ──────────────────────────────────────────
@@ -380,6 +415,9 @@ async def _generate_distance_stream() -> AsyncGenerator[dict, None]:
     # Track previous rank levels to detect rank changes
     _prev_rank_levels: dict[str, int] = {}
     _rank_check_counter = 0
+    # Good posture tracking: accumulate time with no warnings for positive scoring
+    _last_good_posture_ts: float = 0.0
+    _good_posture_accum: float = 0.0
 
     while monitoring_active:
         frame = camera_manager.read_frame()
@@ -426,9 +464,26 @@ async def _generate_distance_stream() -> AsyncGenerator[dict, None]:
             rank_event = None
             if effective_level > 0:
                 warning_history.record_warning(effective_level, result.distance_cm)
+                # Reset good posture tracking during warning
+                _last_good_posture_ts = 0.0
             else:
                 was_warning = warning_history._current_warning_start is not None
                 warning_history.end_warning()
+
+                # Accumulate good posture time (face detected, no warning)
+                if result.face_detected:
+                    if _last_good_posture_ts > 0:
+                        delta = now - _last_good_posture_ts
+                        if delta < 5.0:  # Ignore gaps > 5s (face lost, etc.)
+                            _good_posture_accum += delta
+                    _last_good_posture_ts = now
+                else:
+                    _last_good_posture_ts = 0.0
+
+                # Flush accumulated good posture every 60s
+                if _good_posture_accum >= 60.0:
+                    add_good_posture_time(_good_posture_accum)
+                    _good_posture_accum = 0.0
 
                 # Check rank change when a warning ends (new event recorded)
                 if was_warning:
@@ -487,6 +542,10 @@ async def _generate_distance_stream() -> AsyncGenerator[dict, None]:
             }
 
         await asyncio.sleep(frame_interval)
+
+    # Flush remaining good posture time
+    if _good_posture_accum > 0:
+        add_good_posture_time(_good_posture_accum)
 
     # Send final stop event
     yield {

@@ -19,6 +19,7 @@ export interface Settings {
   frame_rate: number;
   break_reminder_enabled: boolean;
   break_reminder_interval_min: number;
+  break_chaos_level: number;
   posture_detection_enabled: boolean;
   head_tilt_threshold_deg: number;
   emoji_mask_enabled: boolean;

@@ -13,6 +13,8 @@ import {
   ShieldAlert,
   Zap,
   RefreshCw,
+  ChevronDown,
+  Info,
 } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useRank, useHistoryStats, useHistory, queryKeys } from "@/hooks/use-api";
@@ -61,7 +63,7 @@ const RankBadge: React.FC<{
         <RankImage rank={r} size="44px" />
       </div>
       <p className="text-[11px] font-bold truncate" style={{ color: r.color }}>{r.name}</p>
-      <p className="text-[9px] font-mono text-muted-foreground">{period.score.toFixed(0)}pts</p>
+      <p className="text-[9px] font-mono text-muted-foreground">{period.score > 0 ? "+" : ""}{period.score.toFixed(0)}pts</p>
       <div className="h-1 bg-zinc-800 rounded-full overflow-hidden mt-1 mx-1">
         <div
           className="h-full rounded-full transition-all duration-500"
@@ -227,18 +229,18 @@ const WarningHistory: React.FC = () => {
                       {activePeriodRank.current.name}
                     </span>
                     <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-white/10 font-mono" style={{ color: activePeriodRank.current.color }}>
-                      Lv.{activePeriodRank.current.level}
+                      Rank {activePeriodRank.current.level > 0 ? `+${activePeriodRank.current.level}` : activePeriodRank.current.level}
                     </span>
                   </div>
                   <p className="text-xs text-muted-foreground mt-0.5">{activePeriodRank.current.description}</p>
                   <div className="mt-2">
                     <div className="flex items-center justify-between text-[10px] mb-1">
                       <span className="font-mono font-bold" style={{ color: activePeriodRank.current.color }}>
-                        {activePeriodRank.score.toFixed(0)} pts ({periodCfg.statsLabel})
+                        {activePeriodRank.score > 0 ? "+" : ""}{activePeriodRank.score.toFixed(0)} pts ({periodCfg.statsLabel})
                       </span>
                       {activePeriodRank.next && (
                         <span className="text-muted-foreground">
-                          다음: {activePeriodRank.next.name} {activePeriodRank.next.min_score}pts
+                          다음: {activePeriodRank.next.name} {activePeriodRank.next.min_score > 0 ? "+" : ""}{activePeriodRank.next.min_score}pts
                         </span>
                       )}
                     </div>
@@ -327,36 +329,13 @@ const WarningHistory: React.FC = () => {
         </Card>
       </div>
 
-      {/* ── Rank Ladder ── */}
+      {/* ── Rank Ladder (collapsible card) ── */}
       {rank?.all_ranks && (
-        <Card>
-          <CardHeader className="pb-2 px-3 pt-3">
-            <CardTitle className="text-xs">거북이 칭호 단계</CardTitle>
-          </CardHeader>
-          <CardContent className="px-3 pb-3">
-            <div className="flex flex-wrap items-center justify-center gap-1">
-              {rank.all_ranks.map((r) => {
-                const isCurrent = r.level === activePeriodRank?.current?.level;
-                return (
-                  <div
-                    key={r.level}
-                    className={`flex flex-col items-center px-1.5 py-1 rounded-md transition-all ${
-                      isCurrent ? "bg-white/10" : "opacity-40"
-                    }`}
-                    style={isCurrent ? { boxShadow: `0 0 8px ${r.color}40` } : undefined}
-                    title={`${r.name} (${r.min_score}pts)`}
-                  >
-                    <RankImage rank={r} size="36px" />
-                    <span className="text-[8px] mt-0.5 whitespace-nowrap font-mono" style={{ color: r.color }}>
-                      Lv.{r.level}
-                    </span>
-                  </div>
-                );
-              })}
-            </div>
-          </CardContent>
-        </Card>
+        <RankLadder allRanks={rank.all_ranks} currentLevel={activePeriodRank?.current?.level} />
       )}
+
+      {/* ── Scoring Guide (collapsible) ── */}
+      <ScoringGuide />
 
       {/* ── Danger Zone Breakdown ── */}
       {totalCount > 0 && (
@@ -511,6 +490,145 @@ const WarningHistory: React.FC = () => {
         </CardContent>
       </Card>
     </div>
+  );
+};
+
+/** Collapsible scoring rules guide */
+const ScoringGuide: React.FC = () => {
+  const [open, setOpen] = useState(false);
+
+  return (
+    <Card>
+      <button
+        onClick={() => setOpen(!open)}
+        className="w-full flex items-center justify-between px-3 py-3 text-left"
+      >
+        <CardTitle className="text-xs flex items-center gap-1.5">
+          <Info className="h-3.5 w-3.5 text-blue-400" />
+          포인트 기준
+        </CardTitle>
+        <ChevronDown
+          className={`h-4 w-4 text-muted-foreground transition-transform ${open ? "rotate-180" : ""}`}
+        />
+      </button>
+      {open && (
+        <CardContent className="pt-0 pb-4 px-3 space-y-4">
+          <div className="space-y-2">
+            <p className="text-xs font-semibold text-muted-foreground">감점 (나쁜 자세)</p>
+            <div className="grid grid-cols-3 gap-2 text-center">
+              {([
+                { label: "주의 (1단계)", pts: "-1", color: "text-yellow-400" },
+                { label: "경고 (2단계)", pts: "-3", color: "text-orange-400" },
+                { label: "위험 (3단계)", pts: "-8", color: "text-red-400" },
+              ] as const).map((item) => (
+                <div key={item.label} className="rounded-md border border-border/50 p-2">
+                  <p className={`text-lg font-bold ${item.color}`}>{item.pts}</p>
+                  <p className="text-[10px] text-muted-foreground">{item.label}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div className="space-y-2">
+            <p className="text-xs font-semibold text-muted-foreground">가점 (좋은 자세)</p>
+            <div className="grid grid-cols-2 gap-2 text-center">
+              {([
+                { label: "좋은 자세 1분 유지", pts: "+2", color: "text-emerald-400" },
+                { label: "무경고 하루 보너스", pts: "+20", color: "text-cyan-400" },
+              ] as const).map((item) => (
+                <div key={item.label} className="rounded-md border border-border/50 p-2">
+                  <p className={`text-lg font-bold ${item.color}`}>{item.pts}</p>
+                  <p className="text-[10px] text-muted-foreground">{item.label}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div className="space-y-1.5">
+            <p className="text-xs font-semibold text-muted-foreground">추가 규칙</p>
+            <div className="text-[11px] text-muted-foreground space-y-1">
+              <p>• 경고 지속 10초당 <span className="text-red-400 font-medium">-1pt</span> 추가 감점</p>
+              <p>• 매일 점수의 <span className="text-foreground font-medium">5%</span>가 0 방향으로 자연 감소</p>
+              <p>• 포인트 배율 설정으로 획득량 조절 가능</p>
+            </div>
+          </div>
+        </CardContent>
+      )}
+    </Card>
+  );
+};
+
+/** Collapsible rank ladder with detailed card design */
+const RankLadder: React.FC<{
+  allRanks: Array<{ level: number; name: string; emoji: string; image: string; description: string; min_score: number; color: string; bg_gradient: string }>;
+  currentLevel?: number;
+}> = ({ allRanks, currentLevel }) => {
+  const [open, setOpen] = useState(false);
+
+  return (
+    <Card>
+      <button
+        onClick={() => setOpen(!open)}
+        className="w-full flex items-center justify-between px-3 py-3 text-left"
+      >
+        <CardTitle className="text-xs flex items-center gap-1.5">
+          칭호 단계도
+        </CardTitle>
+        <ChevronDown
+          className={`h-4 w-4 text-muted-foreground transition-transform ${open ? "rotate-180" : ""}`}
+        />
+      </button>
+      {open && (
+        <CardContent className="px-3 pb-3 pt-0 space-y-2">
+          {allRanks.map((r) => {
+            const isCurrent = r.level === currentLevel;
+            return (
+              <div
+                key={r.level}
+                className={`flex items-center gap-3 rounded-lg border p-2.5 transition-all ${
+                  isCurrent
+                    ? "border-2 bg-white/5"
+                    : "border-border/40 opacity-60"
+                }`}
+                style={
+                  isCurrent
+                    ? { borderColor: r.color + "80", boxShadow: `0 0 12px ${r.color}25` }
+                    : undefined
+                }
+              >
+                <div className="shrink-0">
+                  <RankImage rank={r} size="44px" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-1.5">
+                    <span
+                      className="text-[10px] font-mono px-1.5 py-0.5 rounded-full"
+                      style={{ backgroundColor: r.color + "20", color: r.color }}
+                    >
+                      Rank {r.level > 0 ? `+${r.level}` : r.level}
+                    </span>
+                    {isCurrent && (
+                      <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-primary/20 text-primary font-semibold">
+                        현재
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-sm font-bold mt-0.5" style={{ color: r.color }}>
+                    {r.emoji} {r.name}
+                  </p>
+                  <p className="text-[11px] text-muted-foreground mt-0.5">{r.description}</p>
+                </div>
+                <div className="shrink-0 text-right">
+                  <span className="text-[10px] font-mono text-muted-foreground">
+                    {r.min_score > 0 ? `+${r.min_score}` : r.min_score}pts
+                  </span>
+                </div>
+              </div>
+            );
+          })}
+        </CardContent>
+      )}
+    </Card>
   );
 };
 

@@ -1,19 +1,23 @@
 {
-  "description": "점수 기준: 높을수록 거북목이 심함. 경고 이벤트마다 점수가 누적됩니다.",
-  "per_event": {
-    "level_1_base": 1,
-    "level_2_base": 3,
-    "level_3_base": 8,
-    "duration_multiplier": 0.1,
-    "duration_description": "경고 유지 시간(초) × 배수가 기본 점수에 추가됩니다"
+  "description": "양방향 점수 시스템: 0에서 시작, 나쁜 자세→마이너스, 좋은 자세→플러스",
+  "penalty": {
+    "level_1_base": -1,
+    "level_2_base": -3,
+    "level_3_base": -8,
+    "duration_multiplier": -0.1,
+    "duration_description": "경고 유지 시간(초) × 배수가 감점됩니다"
+  },
+  "reward": {
+    "good_posture_per_min": 2,
+    "good_posture_description": "모니터링 중 경고 없이 1분 유지할 때마다 +2점"
   },
   "daily_bonus": {
-    "zero_warning_day": -5,
-    "description": "하루 경고 0회 달성 시 감점 (좋은 행동 보상)"
+    "zero_warning_day": 20,
+    "description": "하루 경고 0회 달성 시 +20점 보너스"
   },
   "decay": {
-    "daily_decay_rate": 0.02,
-    "description": "매일 총 점수의 2%가 자연 감소합니다 (개선 반영)"
+    "daily_decay_rate": 0.05,
+    "description": "매일 점수의 5%가 0 방향으로 감소합니다 (양수→줄어듦, 음수→올라감)"
   },
   "score_period_days": 30,
   "score_period_description": "최근 N일간의 이벤트로 점수를 계산합니다"

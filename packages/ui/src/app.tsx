@@ -115,6 +115,11 @@ function App() {
     } catch {}
   }, [resetBreak]);
 
+  const handleTriggerBreak = useCallback(() => {
+    console.log("[App] Trigger break, ipcRenderer:", !!ipcRenderer);
+    ipcRenderer?.send("trigger-break");
+  }, []);
+
   const handleUpdateSettings = useCallback(
     (partial: Record<string, any>) => {
       updateSettings.mutate(partial);
@@ -134,8 +139,7 @@ function App() {
   }
 
   const breakInterval = settings.break_reminder_interval_min;
-  const breakRemainingMin = Math.max(0, breakInterval - breakElapsedMin);
-  const breakRemainingSec = Math.round(breakRemainingMin * 60);
+  const breakRemainingMin = Math.max(0, Math.ceil(breakInterval - breakElapsedMin));
 
   return (
     <div className="flex flex-col h-screen">
@@ -213,7 +217,7 @@ function App() {
                 <span className="text-[11px] font-mono">
                   {needsBreak
                     ? "휴식이 필요합니다!"
-                    : `휴식까지 ${Math.floor(breakRemainingSec / 60)}:${String(breakRemainingSec % 60).padStart(2, "0")}`}
+                    : `휴식까지 ${breakRemainingMin}분`}
                 </span>
               </div>
               {needsBreak && (
@@ -262,11 +266,14 @@ function App() {
               <ExtraSettings
                 breakEnabled={settings.break_reminder_enabled}
                 breakInterval={settings.break_reminder_interval_min}
+                breakChaosLevel={settings.break_chaos_level ?? 3}
                 postureEnabled={settings.posture_detection_enabled}
                 tiltThreshold={settings.head_tilt_threshold_deg}
                 frameRate={settings.frame_rate}
                 onBreakEnabledChange={(v) => handleUpdateSettings({ break_reminder_enabled: v })}
                 onBreakIntervalChange={(v) => handleUpdateSettings({ break_reminder_interval_min: v })}
+                onBreakChaosLevelChange={(v) => handleUpdateSettings({ break_chaos_level: v })}
+                onTriggerBreak={handleTriggerBreak}
                 onPostureEnabledChange={(v) => handleUpdateSettings({ posture_detection_enabled: v })}
                 onTiltThresholdChange={(v) => handleUpdateSettings({ head_tilt_threshold_deg: v })}
                 onFrameRateChange={(v) => handleUpdateSettings({ frame_rate: v })}

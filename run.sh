@@ -52,6 +52,12 @@ for i in $(seq 1 15); do
     sleep 1
 done
 
+# Build Electron TS (so changes to main.ts/preload.ts/overlay.ts take effect)
+echo "[*] Electron 빌드 중..."
+cd apps/desktop
+pnpm build 2>/dev/null
+cd "$SCRIPT_DIR"
+
 # Start React UI dev server
 pnpm dev:ui 2>/dev/null &
 UI_PID=$!

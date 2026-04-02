@@ -8,6 +8,7 @@ import path from "path";
 
 let overlayWindow: BrowserWindow | null = null;
 let currentLevel = 0;
+let breakActive = false;
 let overlayReady = false;
 let pendingCommands: string[] = [];
 
@@ -71,7 +72,7 @@ function createOverlayWindow(): BrowserWindow {
     }
     pendingCommands = [];
     // Re-show window after flushing commands (may have been invisible during load)
-    if (currentLevel > 0) {
+    if (currentLevel > 0 || breakActive) {
       win.showInactive();
     }
   });
@@ -112,6 +113,15 @@ function ensureOverlay(): BrowserWindow {
 }
 
 /**
+ * Update custom warning messages on the overlay.
+ */
+export function setWarningMessages(messages: string[]): void {
+  ensureOverlay();
+  const escaped = JSON.stringify(messages);
+  executeOnOverlay(`window.setWarningMessages(${escaped})`);
+}
+
+/**
  * Show warning overlay at specified level.
  * Level 0 = hide, 1 = caution, 2 = warning, 3 = danger
  */
@@ -147,12 +157,75 @@ export function hideWarning(): void {
 }
 
 /**
- * Show break reminder overlay.
+ * Show break reminder overlay with floating rank images/emojis.
  */
-export function showBreakReminder(): void {
+export function showBreakReminder(rankData?: {
+  emoji: string;
+  image?: string;
+  name: string;
+  color: string;
+}, chaosLevel: number = 3): void {
   const win = ensureOverlay();
-  executeOnOverlay(`window.showBreakReminder()`);
+
+  // Resolve rank image to base64
+  if (rankData?.image) {
+    const fs = require("fs");
+    const prodPath = path.join(__dirname, "..", "ui", "ranks", rankData.image);
+    const devPath = path.join(__dirname, "..", "..", "..", "packages", "ui", "public", "ranks", rankData.image);
+    const resolved = fs.existsSync(prodPath) ? prodPath : devPath;
+    try {
+      const buf = fs.readFileSync(resolved);
+      rankData.image = `data:image/png;base64,${buf.toString("base64")}`;
+    } catch {
+      delete rankData.image;
+    }
+  }
+
+  breakActive = true;
+  console.log("[Overlay] showBreakReminder called, chaosLevel:", chaosLevel, "overlayReady:", overlayReady);
+
+  const escaped = JSON.stringify(rankData || { emoji: "🐢", name: "거북이", color: "#22c55e" });
+  executeOnOverlay(`window.showBreakReminder(${escaped}, ${chaosLevel})`);
+
+  // Enable mouse events so the dismiss button is clickable
+  win.setIgnoreMouseEvents(false);
+
+  // Poll for dismiss from main process
+  const pollDismiss = setInterval(() => {
+    if (!overlayWindow || overlayWindow.isDestroyed()) {
+      clearInterval(pollDismiss);
+      return;
+    }
+    overlayWindow.webContents.executeJavaScript(
+      `document.getElementById('breakReminder').classList.contains('active')`
+    ).then((active: boolean) => {
+      if (!active) {
+        clearInterval(pollDismiss);
+        onBreakDismissed();
+      }
+    }).catch(() => clearInterval(pollDismiss));
+  }, 500);
+
+  // Show window — also schedule a delayed show to handle first-creation race
   win.showInactive();
+  if (!overlayReady) {
+    // Overlay HTML not loaded yet; showInactive() after load is handled by did-finish-load + breakActive flag
+    console.log("[Overlay] Window not ready yet, will show after load");
+  }
+}
+
+/**
+ * Called from overlay when break dismiss button is clicked.
+ */
+export function onBreakDismissed(): void {
+  breakActive = false;
+  console.log("[Overlay] Break dismissed");
+  if (overlayWindow && !overlayWindow.isDestroyed()) {
+    overlayWindow.setIgnoreMouseEvents(true, { forward: true });
+    if (currentLevel === 0) {
+      overlayWindow.hide();
+    }
+  }
 }
 
 /**

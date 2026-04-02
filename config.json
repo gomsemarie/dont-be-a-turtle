@@ -1,0 +1,143 @@
+{
+  "app": {
+    "name": "거북이 키우기",
+    "name_en": "Dont Be A Turtle",
+    "id": "com.faceguard.app",
+    "version": "1.2.0"
+  },
+  "ranks": {
+    "negative": [
+      {
+        "level": -5,
+        "name": "화석 예약 완료",
+        "emoji": "🪦",
+        "image": "rank-neg5.png",
+        "description": "국립중앙박물관에서 전시 섭외 연락 옴",
+        "min_score": -1500,
+        "color": "#7f1d1d",
+        "bg_gradient": "from-red-900/40 to-red-950/20"
+      },
+      {
+        "level": -4,
+        "name": "척추과 단골",
+        "emoji": "🏥",
+        "image": "rank-neg4.png",
+        "description": "정형외과 의사가 당신 보고 눈물 흘림",
+        "min_score": -1000,
+        "color": "#b91c1c",
+        "bg_gradient": "from-red-700/30 to-red-800/10"
+      },
+      {
+        "level": -3,
+        "name": "목 꺾인 백조",
+        "emoji": "🦢",
+        "image": "rank-neg3.png",
+        "description": "우아하게 구부러진 자세... 는 아닙니다",
+        "min_score": -600,
+        "color": "#dc2626",
+        "bg_gradient": "from-red-600/30 to-red-700/5"
+      },
+      {
+        "level": -2,
+        "name": "슬슬 굽는 중",
+        "emoji": "🫠",
+        "image": "rank-neg2.png",
+        "description": "자세가 슬금슬금 무너지고 있어요",
+        "min_score": -300,
+        "color": "#f97316",
+        "bg_gradient": "from-orange-500/25 to-orange-600/5"
+      },
+      {
+        "level": -1,
+        "name": "살짝 위험",
+        "emoji": "🤨",
+        "image": "rank-neg1.png",
+        "description": "아직은 괜찮지만 조금 신경 쓰세요",
+        "min_score": -100,
+        "color": "#facc15",
+        "bg_gradient": "from-yellow-500/20 to-yellow-600/5"
+      }
+    ],
+    "neutral": {
+      "level": 0,
+      "name": "평범한 사람",
+      "emoji": "😐",
+      "image": "rank-0.png",
+      "description": "아직 판단하기엔 이른 상태",
+      "min_score": 0,
+      "color": "#a1a1aa",
+      "bg_gradient": "from-zinc-500/20 to-zinc-600/5"
+    },
+    "positive": [
+      {
+        "level": 1,
+        "name": "자세 의식 중",
+        "emoji": "🧘",
+        "image": "rank-pos1.png",
+        "description": "자세에 관심을 갖기 시작했군요!",
+        "min_score": 100,
+        "color": "#22c55e",
+        "bg_gradient": "from-emerald-500/20 to-emerald-600/5"
+      },
+      {
+        "level": 2,
+        "name": "꼿꼿한 등",
+        "emoji": "💪",
+        "image": "rank-pos2.png",
+        "description": "등이 일자로 펴지기 시작합니다",
+        "min_score": 300,
+        "color": "#10b981",
+        "bg_gradient": "from-emerald-500/25 to-emerald-600/5"
+      },
+      {
+        "level": 3,
+        "name": "자세 교관",
+        "emoji": "🎖️",
+        "image": "rank-pos3.png",
+        "description": "당신의 자세를 보고 군인들이 경례합니다",
+        "min_score": 600,
+        "color": "#06b6d4",
+        "bg_gradient": "from-cyan-500/25 to-cyan-600/5"
+      },
+      {
+        "level": 4,
+        "name": "자세 달인",
+        "emoji": "✨",
+        "image": "rank-pos4.png",
+        "description": "정형외과 의사가 당신을 모델로 삼고 싶어 함",
+        "min_score": 1000,
+        "color": "#8b5cf6",
+        "bg_gradient": "from-violet-500/25 to-violet-600/5"
+      },
+      {
+        "level": 5,
+        "name": "자세의 신",
+        "emoji": "👑",
+        "image": "rank-pos5.png",
+        "description": "완벽한 자세의 화신. 전설이 되었습니다",
+        "min_score": 1500,
+        "color": "#f59e0b",
+        "bg_gradient": "from-amber-500/30 to-amber-600/10"
+      }
+    ]
+  },
+  "scoring": {
+    "penalty": {
+      "level_1": -1,
+      "level_2": -3,
+      "level_3": -8,
+      "duration_multiplier": -0.1
+    },
+    "reward": {
+      "good_posture_per_min": 2,
+      "zero_warning_day_bonus": 20
+    },
+    "decay": {
+      "daily_percent_toward_zero": 5
+    }
+  },
+  "ui": {
+    "rank_section_title": "칭호 단계도",
+    "scoring_section_title": "포인트 기준"
+  }
+}

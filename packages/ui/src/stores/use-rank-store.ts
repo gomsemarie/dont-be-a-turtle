@@ -55,7 +55,7 @@ interface CelebrationState {
 
 export const useCelebrationStore = create<CelebrationState>((set, get) => ({
   celebration: null,
-  _prevLevels: { daily: 0, weekly: 0, monthly: 0 },
+  _prevLevels: { daily: -999, weekly: -999, monthly: -999 },
   _initialized: false,
 
   checkCelebration: (rankData) => {
@@ -74,6 +74,7 @@ export const useCelebrationStore = create<CelebrationState>((set, get) => ({
     }
 
     // Check each period for rank change, prioritize monthly > weekly > daily
+    // "up" = moving towards positive (good), "down" = moving towards negative (bad)
     let celebration = get().celebration;
     for (const period of ["monthly", "weekly", "daily"] as const) {
       if (curr[period] !== prev[period]) {

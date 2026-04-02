@@ -141,6 +141,12 @@ export function useResetBreak() {
   });
 }
 
+export function useTriggerBreak() {
+  return useMutation({
+    mutationFn: () => api("/api/break/trigger", { method: "POST" }),
+  });
+}
+
 // ─── Calibration ─────────────────────────────────────────────
 
 interface CalibrateStartParams {

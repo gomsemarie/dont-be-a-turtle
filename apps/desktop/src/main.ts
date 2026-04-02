@@ -9,7 +9,7 @@ import http from "http";
 import { IncomingMessage } from "http";
 import { startBackend, stopBackend, BACKEND_PORT } from "./python-manager";
 import { createTray, updateTrayState, updateTrayMonitoring, destroyTray } from "./tray";
-import { showWarning, hideWarning, showBreakReminder, showPostureAlert, showCelebration, destroyOverlay } from "./overlay";
+import { showWarning, hideWarning, showBreakReminder, showPostureAlert, showCelebration, setWarningMessages, destroyOverlay } from "./overlay";
 
 let mainWindow: BrowserWindow | null = null;
 let isQuitting = false;
@@ -28,6 +28,10 @@ const DEFAULT_WARNING_MESSAGES: Record<number, { title: string; body: string }> 
 // Settings synced from backend
 let customWarningMessages: string[] = [];
 let notificationEnabled = true;
+let breakChaosLevel = 3;
+
+// Current rank data (for break reminder)
+let currentRankData: { emoji: string; image?: string; name: string; color: string } | null = null;
 
 // ─── Settings sync ────────────────────────────────────────────
 
@@ -37,8 +41,27 @@ async function syncSettings(): Promise<void> {
     const parsed = JSON.parse(data);
     if (Array.isArray(parsed.warning_messages)) {
       customWarningMessages = parsed.warning_messages;
+      // Push to overlay so it can display them
+      setWarningMessages(customWarningMessages);
     }
     notificationEnabled = parsed.notification_enabled !== false;
+    breakChaosLevel = parsed.break_chaos_level ?? 3;
+  } catch {
+    // keep current values
+  }
+  // Also sync current rank data
+  try {
+    const rankData = await httpGet(`http://127.0.0.1:${BACKEND_PORT}/api/rank`);
+    const rank = JSON.parse(rankData);
+    const monthly = rank?.monthly?.current;
+    if (monthly) {
+      currentRankData = {
+        emoji: monthly.emoji || "🐢",
+        image: monthly.image,
+        name: monthly.name || "거북이",
+        color: monthly.color || "#22c55e",
+      };
+    }
   } catch {
     // keep current values
   }
@@ -330,7 +353,7 @@ async function startMonitoringLoop(): Promise<void> {
           }
 
           // Overlay break/posture
-          if (needsBreak) showBreakReminder();
+          if (needsBreak) showBreakReminder(currentRankData || undefined, breakChaosLevel);
           if (postureAlert) showPostureAlert();
         } catch {
           // ignore parse errors
@@ -469,6 +492,12 @@ app.whenReady().then(async () => {
   ipcMain.on("monitoring-stopped", () => stopMonitoringLoop());
   ipcMain.on("show-celebration", (_event: any, data: any) => {
     showCelebration(data);
+  });
+  ipcMain.on("trigger-break", async () => {
+    // Must sync first to get latest rank data (image) + chaos level from backend
+    await syncSettings();
+    console.log("[Main] Manual break triggered, chaosLevel:", breakChaosLevel, "rankData:", JSON.stringify(currentRankData));
+    showBreakReminder(currentRankData || undefined, breakChaosLevel);
   });
 });
 

@@ -87,29 +87,141 @@
     .message-box .title { font-size: 28px; font-weight: 800; letter-spacing: -0.5px; }
     .message-box .subtitle { font-size: 16px; font-weight: 400; margin-top: 8px; opacity: 0.9; }
 
-    /* ─── Break reminder ─── */
+    /* ─── Break reminder (full screen floating chaos) ─── */
     .break-reminder {
       position: fixed;
-      top: 50%; left: 50%;
-      transform: translate(-50%, -50%) scale(0.8);
-      background: rgba(37, 99, 235, 0.95);
-      color: white;
-      padding: 32px 48px;
-      border-radius: 20px;
-      text-align: center;
+      top: 0; left: 0; right: 0; bottom: 0;
       opacity: 0;
-      transition: all 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+      transition: opacity 0.5s ease;
       z-index: 9999;
       pointer-events: none;
-      box-shadow: 0 20px 60px rgba(37, 99, 235, 0.4);
+      background: rgba(0, 0, 0, 0.3);
+      overflow: hidden;
     }
     .break-reminder.active {
       opacity: 1;
-      transform: translate(-50%, -50%) scale(1);
+      pointer-events: auto;
     }
-    .break-reminder .icon { font-size: 48px; }
-    .break-reminder .title { font-size: 24px; font-weight: 700; margin-top: 8px; }
-    .break-reminder .subtitle { font-size: 15px; font-weight: 400; margin-top: 8px; opacity: 0.85; }
+    .break-reminder .break-floaters {
+      position: absolute;
+      top: 0; left: 0; right: 0; bottom: 0;
+      overflow: hidden;
+    }
+    .break-reminder .break-float-item {
+      position: absolute;
+      animation-timing-function: ease-in-out;
+      animation-iteration-count: infinite;
+      animation-direction: alternate;
+      image-rendering: pixelated;
+      filter: drop-shadow(0 4px 12px rgba(0,0,0,0.4));
+      user-select: none;
+      pointer-events: none;
+    }
+    .break-reminder .break-float-item img {
+      width: 100%;
+      height: 100%;
+      object-fit: contain;
+      image-rendering: pixelated;
+    }
+    .break-reminder .break-center {
+      position: absolute;
+      top: 50%; left: 50%;
+      transform: translate(-50%, -50%);
+      text-align: center;
+      z-index: 10;
+      pointer-events: auto;
+    }
+    .break-reminder .break-center .break-icon { font-size: 64px; margin-bottom: 8px; }
+    .break-reminder .break-center .break-title {
+      font-size: 32px; font-weight: 900; color: white;
+      text-shadow: 0 4px 20px rgba(0,0,0,0.5);
+      margin-bottom: 4px;
+    }
+    .break-reminder .break-center .break-sub {
+      font-size: 16px; color: rgba(255,255,255,0.8);
+      text-shadow: 0 2px 8px rgba(0,0,0,0.4);
+      margin-bottom: 24px;
+    }
+    .break-reminder .break-center .break-rank-name {
+      font-size: 14px; font-weight: 700;
+      margin-bottom: 20px;
+      text-shadow: 0 2px 8px rgba(0,0,0,0.3);
+    }
+    .break-reminder .break-dismiss {
+      padding: 14px 40px;
+      border: 2px solid rgba(255,255,255,0.6);
+      border-radius: 999px;
+      background: rgba(255,255,255,0.15);
+      backdrop-filter: blur(8px);
+      color: white;
+      font-size: 16px;
+      font-weight: 700;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      pointer-events: auto;
+    }
+    .break-reminder .break-dismiss:hover {
+      background: rgba(255,255,255,0.3);
+      border-color: white;
+      transform: scale(1.05);
+    }
+    @keyframes break-float-x {
+      0% { transform: translateX(0) rotate(0deg); }
+      100% { transform: translateX(var(--dx)) rotate(var(--rot)); }
+    }
+    @keyframes break-float-y {
+      0% { transform: translateY(0); }
+      100% { transform: translateY(var(--dy)); }
+    }
+    @keyframes break-bounce {
+      0%, 100% { transform: translate(-50%, -50%) scale(1); }
+      50% { transform: translate(-50%, -50%) scale(1.03); }
+    }
+
+    /* ─── Top-center warning message ─── */
+    .warning-message {
+      position: fixed;
+      top: 24px;
+      left: 50%;
+      transform: translateX(-50%) translateY(-20px);
+      padding: 10px 28px;
+      border-radius: 12px;
+      font-size: 15px;
+      font-weight: 700;
+      text-align: center;
+      opacity: 0;
+      transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+      z-index: 10000;
+      pointer-events: none;
+      white-space: nowrap;
+      max-width: 80vw;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .warning-message.active {
+      opacity: 1;
+      transform: translateX(-50%) translateY(0);
+    }
+    .warning-message.level-1 {
+      background: rgba(234, 179, 8, 0.92);
+      color: #422006;
+      box-shadow: 0 6px 24px rgba(234, 179, 8, 0.4);
+    }
+    .warning-message.level-2 {
+      background: rgba(249, 115, 22, 0.92);
+      color: white;
+      box-shadow: 0 6px 24px rgba(249, 115, 22, 0.4);
+    }
+    .warning-message.level-3 {
+      background: rgba(239, 68, 68, 0.95);
+      color: white;
+      box-shadow: 0 6px 24px rgba(239, 68, 68, 0.5);
+      animation: flash-msg 0.8s ease-in-out infinite;
+    }
+    @keyframes flash-msg {
+      0%, 100% { transform: translateX(-50%) translateY(0) scale(1); }
+      50% { transform: translateX(-50%) translateY(0) scale(1.03); }
+    }
 
     /* ─── Posture alert ─── */
     .posture-alert {
@@ -255,6 +367,7 @@
   </style>
 </head>
 <body>
+  <div class="warning-message" id="warningMessage"></div>
   <div class="warning-bar-top" id="barTop"></div>
   <div class="warning-bar-bottom" id="barBottom"></div>
   <div class="warning-border" id="warningBorder"></div>
@@ -266,9 +379,14 @@
     </div>
   </div>
   <div class="break-reminder" id="breakReminder">
-    <div class="icon">☕</div>
-    <div class="title">휴식 시간이에요</div>
-    <div class="subtitle">잠시 눈을 쉬어주세요</div>
+    <div class="break-floaters" id="breakFloaters"></div>
+    <div class="break-center" style="animation: break-bounce 2s ease-in-out infinite">
+      <div class="break-icon">☕</div>
+      <div class="break-title">휴식 시간이에요!</div>
+      <div class="break-sub">잠시 눈을 쉬어주세요</div>
+      <div class="break-rank-name" id="breakRankName"></div>
+      <button class="break-dismiss" id="breakDismissBtn" onclick="dismissBreak()">휴식 종료</button>
+    </div>
   </div>
   <div class="posture-alert" id="postureAlert">
     🧘 자세를 바르게 해주세요
@@ -294,9 +412,13 @@
     const overlay = document.getElementById('warningOverlay');
     const breakEl = document.getElementById('breakReminder');
     const postureEl = document.getElementById('postureAlert');
+    const warningMsgEl = document.getElementById('warningMessage');
 
     let breakTimeout = null;
     let postureTimeout = null;
+
+    // Warning messages per level (set from main process)
+    let warningMessages = ['', '', ''];
 
     // ─── Audio: generate warning beep using Web Audio API ───
     const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
@@ -343,6 +465,11 @@
       }
     }
 
+    // ─── Warning messages (set from main process) ───
+    window.setWarningMessages = function(messages) {
+      if (Array.isArray(messages)) warningMessages = messages;
+    };
+
     // ─── Warning level control ───
     window.setWarningLevel = function(level) {
       console.log('[Overlay] setWarningLevel:', level);
@@ -352,6 +479,7 @@
       barBottom.classList.remove('active');
       border.classList.remove('active');
       overlay.classList.remove('active');
+      warningMsgEl.classList.remove('active', 'level-1', 'level-2', 'level-3');
 
       if (level >= 1) {
         barTop.classList.add('active');
@@ -364,21 +492,120 @@
         overlay.classList.add('active');
       }
 
-      // Play warning sound
+      // Show warning message at top center
       if (level > 0) {
+        const msg = warningMessages[level - 1];
+        if (msg) {
+          warningMsgEl.textContent = msg;
+          warningMsgEl.classList.add('active', 'level-' + level);
+        }
         playWarningSound(level);
       }
     };
 
-    window.showBreakReminder = function() {
-      playBeep(600, 0.3, 0.2);
-      setTimeout(() => playBeep(800, 0.3, 0.2), 400);
+    window.showBreakReminder = function(rankData, chaosLevel) {
+      // Dismiss any active celebration first
+      celEl.classList.remove('active', 'fade-out');
+      celParticles.innerHTML = '';
+      if (celTimeout) { clearTimeout(celTimeout); celTimeout = null; }
+      if (celFadeTimeout) { clearTimeout(celFadeTimeout); celFadeTimeout = null; }
+
+      // rankData: { emoji, image?, name, color }
+      // chaosLevel: 1-10 (default 3)
+      const emoji = (rankData && rankData.emoji) || '🐢';
+      const color = (rankData && rankData.color) || '#22c55e';
+      const image = rankData && rankData.image;
+      const name = (rankData && rankData.name) || '';
+      const chaos = Math.max(1, Math.min(10, chaosLevel || 3));
+
+      // Set rank name in center
+      const rankNameEl = document.getElementById('breakRankName');
+      rankNameEl.textContent = name ? '— ' + emoji + ' ' + name + ' —' : '';
+      rankNameEl.style.color = color;
+
+      // Sound — louder at higher chaos, more beeps at high chaos
+      const vol = 0.1 + (chaos / 10) * 0.3;
+      playBeep(600, 0.3, vol);
+      setTimeout(() => playBeep(800, 0.3, vol), 400);
+      if (chaos >= 7) setTimeout(() => playBeep(1000, 0.2, vol), 700);
+      if (chaos >= 9) setTimeout(() => playBeep(1200, 0.15, vol), 900);
+
+      // Spawn floating items — exponential scaling for dramatic difference
+      const floaters = document.getElementById('breakFloaters');
+      floaters.innerHTML = '';
+
+      const emojis = [emoji, '☕', '😴', '🧘', '💆', '🌿', '✨'];
+      // Exponential item count: 3→8→15→24→35→48→65→85→110→140
+      const count = Math.round(3 * Math.pow(1.5, chaos - 1));
+      const minSize = Math.max(16, 50 - chaos * 4);   // 46→10 — more variety at high chaos
+      const maxSize = 50 + chaos * 25;                 // 75→300px — massive at high chaos
+      const imgChance = image ? (0.3 + chaos * 0.05) : 0; // 35%→80% image usage at high chaos
+
+      // Dynamic background darkness: subtle at low, nearly opaque at high
+      const bgOpacity = (0.1 + Math.pow(chaos / 10, 1.5) * 0.55).toFixed(2); // 0.12→0.65
+      breakEl.style.background = 'rgba(0, 0, 0, ' + bgOpacity + ')';
+
+      for (let i = 0; i < count; i++) {
+        const el = document.createElement('div');
+        el.className = 'break-float-item';
+
+        // Alternate between rank image and emojis
+        const useImage = Math.random() < imgChance;
+        if (useImage) {
+          const img = document.createElement('img');
+          img.src = image;
+          img.draggable = false;
+          el.appendChild(img);
+        } else {
+          el.textContent = emojis[Math.floor(Math.random() * emojis.length)];
+        }
+
+        // Random size — at high chaos some items are HUGE
+        const isGiant = chaos >= 6 && Math.random() < (chaos - 5) * 0.08;
+        const size = isGiant
+          ? (maxSize + Math.floor(Math.random() * 150))
+          : (minSize + Math.floor(Math.random() * (maxSize - minSize)));
+        el.style.width = size + 'px';
+        el.style.height = size + 'px';
+        el.style.fontSize = size + 'px';
+        el.style.lineHeight = size + 'px';
+
+        // Random position
+        el.style.left = (-10 + Math.random() * 100) + '%';
+        el.style.top = (-10 + Math.random() * 100) + '%';
+
+        // Movement magnitude scales exponentially
+        const moveMag = 30 + chaos * chaos * 2; // 32→230
+        const dx = (-moveMag + Math.random() * moveMag * 2);
+        const dy = (-moveMag * 0.8 + Math.random() * moveMag * 1.6);
+        const rotRange = 10 + chaos * chaos; // 11→110 degrees
+        const rot = (-rotRange + Math.random() * rotRange * 2);
+        // Speed: slow at low chaos, frantic at high
+        const dur = Math.max(0.6, (6 - chaos * 0.5) + Math.random() * 2); // 5.5s→1.1s
+        const delay = Math.random() * Math.max(0.3, 3 - chaos * 0.25);
+
+        el.style.setProperty('--dx', dx + 'px');
+        el.style.setProperty('--dy', dy + 'px');
+        el.style.setProperty('--rot', rot + 'deg');
+        el.style.animation = 'break-float-x ' + dur + 's ease-in-out ' + delay + 's infinite alternate, break-float-y ' + (dur * 0.7) + 's ease-in-out ' + (delay + 0.3) + 's infinite alternate';
+        el.style.opacity = (0.5 + Math.random() * 0.5).toFixed(2);
+
+        floaters.appendChild(el);
+      }
+
       breakEl.classList.add('active');
       if (breakTimeout) clearTimeout(breakTimeout);
-      breakTimeout = setTimeout(() => {
-        breakEl.classList.remove('active');
-      }, 10000);
     };
+
+    function dismissBreak() {
+      breakEl.classList.remove('active');
+      document.getElementById('breakFloaters').innerHTML = '';
+      if (breakTimeout) clearTimeout(breakTimeout);
+      // Notify main process to re-enable click-through
+      if (window.__breakDismissCallback) window.__breakDismissCallback();
+    }
+
+    window.dismissBreak = dismissBreak;
 
     window.showPostureAlert = function() {
       playBeep(700, 0.2, 0.15);
@@ -398,12 +625,17 @@
     let celFadeTimeout = null;
 
     window.showCelebration = function(data) {
+      // Dismiss any active break first to avoid flicker
+      breakEl.classList.remove('active');
+      document.getElementById('breakFloaters').innerHTML = '';
+      breakEl.style.background = '';
+
       // data: { direction, emoji, image?, name, level, description, color }
       const isUp = data.direction === 'up';
       const color = data.color || '#22c55e';
 
       // Populate content
-      document.getElementById('celDirection').textContent = isUp ? '⬆️ 칭호 승급!' : '⬇️ 칭호 변경';
+      document.getElementById('celDirection').textContent = isUp ? '⬆️ 칭호 상승!' : '⬇️ 칭호 하락';
       document.getElementById('celDirection').style.color = color;
 
       const emojiEl = document.getElementById('celEmoji');
@@ -418,7 +650,8 @@
       document.getElementById('celName').style.color = color;
 
       const badge = document.getElementById('celBadge');
-      badge.textContent = 'Lv.' + (data.level || 1);
+      var lvl = data.level || 0;
+      badge.textContent = 'Rank ' + (lvl > 0 ? '+' + lvl : lvl);
       badge.style.backgroundColor = color + '30';
       badge.style.color = color;
       badge.style.border = '1px solid ' + color + '50';

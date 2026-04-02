@@ -109,6 +109,7 @@ class AppSettings(BaseModel):
     # Break reminder settings
     break_reminder_enabled: bool = Field(default_factory=lambda: _d("break_reminder_enabled", True))
     break_reminder_interval_min: int = Field(default_factory=lambda: _d("break_reminder_interval_min", 50))
+    break_chaos_level: int = Field(default_factory=lambda: _d("break_chaos_level", 3))
     # Posture detection
     posture_detection_enabled: bool = Field(default_factory=lambda: _d("posture_detection_enabled", False))
     head_tilt_threshold_deg: float = Field(default_factory=lambda: _d("head_tilt_threshold_deg", 15.0))
