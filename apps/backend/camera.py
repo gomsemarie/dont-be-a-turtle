@@ -28,6 +28,18 @@ class CameraManager:
 
         cameras = []
         for i in range(max_check):
+            # Skip the currently open camera — re-opening it on macOS
+            # can invalidate the existing capture handle.
+            if i == self._current_index and self._capture is not None:
+                w = int(self._capture.get(cv2.CAP_PROP_FRAME_WIDTH))
+                h = int(self._capture.get(cv2.CAP_PROP_FRAME_HEIGHT))
+                cameras.append({
+                    "index": i,
+                    "name": f"Camera {i}",
+                    "resolution": f"{w}x{h}",
+                })
+                continue
+
             cap = cv2.VideoCapture(i)
             if cap.isOpened():
                 w = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))

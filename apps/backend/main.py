@@ -63,7 +63,7 @@ async def lifespan(app: FastAPI):
     face_detector.release()
 
 
-app = FastAPI(title="거북이 키우기 Backend", version="1.0.0", lifespan=lifespan)
+app = FastAPI(title="거북이 키우기 Backend", version="1.1.0", lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
@@ -88,7 +88,7 @@ def _apply_warning_thresholds():
 
 @app.get("/api/health")
 async def health_check():
-    return {"status": "ok", "version": "1.0.0"}
+    return {"status": "ok", "version": "1.1.0"}
 
 
 @app.get("/api/cameras")

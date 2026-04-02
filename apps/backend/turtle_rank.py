@@ -1,6 +1,7 @@
 """Turtle rank system — score calculation and rank determination."""
 
 import json
+import sys
 import time
 from datetime import datetime, timedelta
 from pathlib import Path
@@ -13,9 +14,16 @@ def _data_dir() -> Path:
     return get_config_path().parent
 
 
+def _bundle_dir() -> Path:
+    """Return the directory where bundled files live (PyInstaller or source)."""
+    if getattr(sys, 'frozen', False):
+        return Path(sys._MEIPASS)
+    return Path(__file__).parent
+
+
 def _load_json(filename: str, fallback: dict) -> dict:
     """Load JSON config: user override in data dir > bundled default."""
-    for path in [_data_dir() / filename, Path(__file__).parent / filename]:
+    for path in [_data_dir() / filename, _bundle_dir() / filename]:
         if path.exists():
             try:
                 return json.loads(path.read_text(encoding="utf-8"))

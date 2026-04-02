@@ -8,6 +8,7 @@ Settings are loaded from:
 
 import json
 import os
+import sys
 from pathlib import Path
 from typing import Optional
 
@@ -29,8 +30,9 @@ def _find_default_settings_json() -> dict:
         except (json.JSONDecodeError, Exception):
             pass
 
-    # 2. Bundled with the app (same dir as this .py file)
-    bundled = Path(__file__).parent / "default_settings.json"
+    # 2. Bundled with the app (PyInstaller bundle or source dir)
+    bundle_dir = Path(sys._MEIPASS) if getattr(sys, 'frozen', False) else Path(__file__).parent
+    bundled = bundle_dir / "default_settings.json"
     if bundled.exists():
         try:
             return json.loads(bundled.read_text(encoding="utf-8"))

@@ -14,7 +14,11 @@ a = Analysis(
     ['main.py'],
     pathex=[],
     binaries=[],
-    datas=mediapipe_datas,
+    datas=mediapipe_datas + [
+        ('turtle_ranks.json', '.'),
+        ('scoring_rules.json', '.'),
+        ('default_settings.json', '.'),
+    ],
     hiddenimports=[
         'uvicorn.logging',
         'uvicorn.loops',
