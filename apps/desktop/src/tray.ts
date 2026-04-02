@@ -3,6 +3,7 @@
  */
 
 import { Tray, Menu, nativeImage, app } from "electron";
+import path from "path";
 
 let tray: Tray | null = null;
 let trayActions: TrayActions | null = null;
@@ -88,12 +89,32 @@ function createMacTemplateIcon(): Electron.NativeImage {
   return img;
 }
 
+function getTrayIconPath(): string {
+  const isDev = !app.isPackaged;
+  if (isDev) {
+    return path.join(__dirname, "..", "..", "resources", "tray-icon.png");
+  }
+  // Production: resources are in the app's resource path
+  return path.join(process.resourcesPath, "..", "resources", "tray-icon.png");
+}
+
 function createTrayIcon(color: "green" | "yellow" | "orange" | "red" | "gray"): Electron.NativeImage {
   if (IS_MAC) {
     return createMacTemplateIcon();
   }
 
-  // Windows / Linux — colored SVG icon
+  // Windows / Linux — use rank-10 PNG icon (always visible on any tray background)
+  try {
+    const iconPath = getTrayIconPath();
+    const icon = nativeImage.createFromPath(iconPath);
+    if (!icon.isEmpty()) {
+      return icon.resize({ width: 16, height: 16 });
+    }
+  } catch {
+    // fallback to SVG
+  }
+
+  // Fallback: colored SVG icon
   const size = 16;
   const colors: Record<string, string> = {
     green: "#22c55e",
@@ -103,7 +124,6 @@ function createTrayIcon(color: "green" | "yellow" | "orange" | "red" | "gray"): 
     gray: "#6b7280",
   };
 
-  // Turtle silhouette icon
   const svg = `
     <svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 ${size} ${size}">
       <circle cx="8" cy="8" r="7" fill="${colors[color]}" />

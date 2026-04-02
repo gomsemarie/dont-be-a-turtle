@@ -17,6 +17,8 @@ extraResources:
     to: backend
     filter:
       - "**/*"
+  - from: ../../resources/tray-icon.png
+    to: ../resources/tray-icon.png
 
 win:
   target:
