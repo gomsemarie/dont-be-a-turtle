@@ -20,11 +20,32 @@ class CameraManager:
         self._lock = threading.Lock()
         self._current_index: int = -1
 
+    @staticmethod
+    def _get_system_camera_names() -> list[str]:
+        """Get camera device names from the OS (macOS only, falls back to empty)."""
+        if platform.system() != "Darwin":
+            return []
+        try:
+            import subprocess
+            result = subprocess.run(
+                ["system_profiler", "SPCameraDataType", "-json"],
+                capture_output=True, text=True, timeout=5,
+            )
+            import json
+            data = json.loads(result.stdout)
+            cameras = data.get("SPCameraDataType", [])
+            return [cam.get("_name", "") for cam in cameras]
+        except Exception:
+            return []
+
     def list_cameras(self, max_check: int = 10, force: bool = False) -> list[dict]:
         """List available camera devices. Uses cached result unless stale or force=True."""
         now = time.time()
         if not force and self._camera_list_cache and (now - self._camera_list_time) < self._CAMERA_LIST_TTL:
             return self._camera_list_cache
+
+        # Try to get real camera names from OS
+        system_names = self._get_system_camera_names()
 
         cameras = []
         for i in range(max_check):
@@ -33,9 +54,10 @@ class CameraManager:
             if i == self._current_index and self._capture is not None:
                 w = int(self._capture.get(cv2.CAP_PROP_FRAME_WIDTH))
                 h = int(self._capture.get(cv2.CAP_PROP_FRAME_HEIGHT))
+                name = system_names[len(cameras)] if len(cameras) < len(system_names) else f"Camera {i}"
                 cameras.append({
                     "index": i,
-                    "name": f"Camera {i}",
+                    "name": name,
                     "resolution": f"{w}x{h}",
                 })
                 continue
@@ -44,9 +66,10 @@ class CameraManager:
             if cap.isOpened():
                 w = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
                 h = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+                name = system_names[len(cameras)] if len(cameras) < len(system_names) else f"Camera {i}"
                 cameras.append({
                     "index": i,
-                    "name": f"Camera {i}",
+                    "name": name,
                     "resolution": f"{w}x{h}",
                 })
                 cap.release()

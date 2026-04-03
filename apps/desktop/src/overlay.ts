@@ -5,6 +5,7 @@
 
 import { BrowserWindow, screen } from "electron";
 import path from "path";
+import fs from "fs";
 
 let overlayWindow: BrowserWindow | null = null;
 let currentLevel = 0;
@@ -113,6 +114,22 @@ function ensureOverlay(): BrowserWindow {
 }
 
 /**
+ * Resolve rank image file to base64 data URI.
+ * Tries prod path first, then dev path.
+ */
+function resolveRankImage(imageName: string): string | undefined {
+  const prodPath = path.join(__dirname, "..", "ui", "ranks", imageName);
+  const devPath = path.join(__dirname, "..", "..", "..", "packages", "ui", "public", "ranks", imageName);
+  const resolved = fs.existsSync(prodPath) ? prodPath : devPath;
+  try {
+    const buf = fs.readFileSync(resolved);
+    return `data:image/png;base64,${buf.toString("base64")}`;
+  } catch {
+    return undefined;
+  }
+}
+
+/**
  * Update custom warning messages on the overlay.
  */
 export function setWarningMessages(messages: string[]): void {
@@ -169,14 +186,10 @@ export function showBreakReminder(rankData?: {
 
   // Resolve rank image to base64
   if (rankData?.image) {
-    const fs = require("fs");
-    const prodPath = path.join(__dirname, "..", "ui", "ranks", rankData.image);
-    const devPath = path.join(__dirname, "..", "..", "..", "packages", "ui", "public", "ranks", rankData.image);
-    const resolved = fs.existsSync(prodPath) ? prodPath : devPath;
-    try {
-      const buf = fs.readFileSync(resolved);
-      rankData.image = `data:image/png;base64,${buf.toString("base64")}`;
-    } catch {
+    const resolved = resolveRankImage(rankData.image);
+    if (resolved) {
+      rankData.image = resolved;
+    } else {
       delete rankData.image;
     }
   }
@@ -229,12 +242,26 @@ export function onBreakDismissed(): void {
 }
 
 /**
- * Show posture alert overlay.
+ * Show posture alert overlay with specific message and level.
  */
-export function showPostureAlert(): void {
+export function showPostureAlert(message?: string, level?: number): void {
   const win = ensureOverlay();
-  executeOnOverlay(`window.showPostureAlert()`);
+  const msg = JSON.stringify(message || "자세를 바르게 해주세요");
+  const lvl = level || 1;
+  executeOnOverlay(`window.showPostureAlert(${msg}, ${lvl})`);
   win.showInactive();
+}
+
+/**
+ * Show/hide face-lost countdown timer on overlay.
+ * remainingSec <= 0 means face is detected (hide timer).
+ */
+export function showFaceLostTimer(remainingSec: number, elapsedSec: number): void {
+  const win = ensureOverlay();
+  executeOnOverlay(`window.showFaceLostTimer(${remainingSec}, ${elapsedSec})`);
+  if (remainingSec > 0) {
+    win.showInactive();
+  }
 }
 
 /**
@@ -253,20 +280,15 @@ export function showCelebration(data: {
 
   // Resolve image to base64 data URI so overlay.html can display it reliably
   if (data.image) {
-    const fs = require("fs");
-    // __dirname = apps/desktop/dist-electron/
-    // prod: apps/desktop/ui/ranks/
     const prodPath = path.join(__dirname, "..", "ui", "ranks", data.image);
-    // dev: need 3 levels up to project root, then packages/ui/public/ranks/
     const devPath = path.join(__dirname, "..", "..", "..", "packages", "ui", "public", "ranks", data.image);
     console.log("[Overlay] Image lookup:", { prodPath, devPath, prodExists: fs.existsSync(prodPath), devExists: fs.existsSync(devPath) });
-    const resolved = fs.existsSync(prodPath) ? prodPath : devPath;
-    try {
-      const buf = fs.readFileSync(resolved);
-      data.image = `data:image/png;base64,${buf.toString("base64")}`;
+    const resolved = resolveRankImage(data.image);
+    if (resolved) {
+      data.image = resolved;
       console.log("[Overlay] Image loaded OK, base64 length:", data.image.length);
-    } catch (e) {
-      console.error("[Overlay] Failed to read rank image:", resolved, e);
+    } else {
+      console.error("[Overlay] Failed to read rank image");
       delete data.image;
     }
   }

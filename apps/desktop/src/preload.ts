@@ -14,6 +14,7 @@ contextBridge.exposeInMainWorld("electronAPI", {
       "test-notification",
       "show-celebration",
       "trigger-break",
+      "open-external-url",
     ];
     if (validChannels.includes(channel)) {
       ipcRenderer.send(channel, ...args);

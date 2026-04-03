@@ -39,7 +39,21 @@ def _load_json(filename: str, fallback: dict) -> dict:
 
 def load_ranks() -> list[dict]:
     data = _load_json("turtle_ranks.json", {"ranks": []})
-    return sorted(data.get("ranks", []), key=lambda r: r.get("min_score", 0))
+    ranks = data.get("ranks", [])
+
+    # Merge step_label from bundled defaults if missing in user data
+    bundled_path = _bundle_dir() / "turtle_ranks.json"
+    if bundled_path.exists():
+        try:
+            bundled = json.loads(bundled_path.read_text(encoding="utf-8"))
+            defaults = {r["level"]: r for r in bundled.get("ranks", []) if "level" in r}
+            for r in ranks:
+                if not r.get("step_label") and r.get("level") in defaults:
+                    r["step_label"] = defaults[r["level"]].get("step_label", "")
+        except Exception:
+            pass
+
+    return sorted(ranks, key=lambda r: r.get("min_score", 0))
 
 
 def load_scoring_rules() -> dict:
@@ -211,11 +225,15 @@ def get_rank_for_score(score: float, ranks: Optional[list[dict]] = None) -> dict
                 nxt = r
                 break
 
+    # Progress always increases toward the "next" rank (0→100%).
+    # For negative scores recovering toward 0, "next" is the rank closer to 0,
+    # so progress = how far we've climbed from current.min_score toward next.min_score.
     progress = 0.0
     if nxt:
-        denom = abs(nxt["min_score"] - current.get("min_score", 0))
-        if denom > 0:
-            progress = abs(score - current.get("min_score", 0)) / denom * 100
+        span = nxt["min_score"] - current.get("min_score", 0)
+        traveled = score - current.get("min_score", 0)
+        if abs(span) > 0:
+            progress = max(0.0, min(100.0, (traveled / span) * 100))
 
     return {"current": current, "next": nxt, "score": score, "progress_to_next": round(progress, 1)}
 

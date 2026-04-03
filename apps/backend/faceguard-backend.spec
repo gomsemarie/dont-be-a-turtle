@@ -18,6 +18,7 @@ a = Analysis(
         ('turtle_ranks.json', '.'),
         ('scoring_rules.json', '.'),
         ('default_settings.json', '.'),
+        ('../../config.json', '.'),
     ],
     hiddenimports=[
         'uvicorn.logging',

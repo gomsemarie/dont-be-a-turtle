@@ -223,26 +223,45 @@
       50% { transform: translateX(-50%) translateY(0) scale(1.03); }
     }
 
-    /* ─── Posture alert ─── */
+    /* ─── Posture alert — bottom center of monitor ─── */
     .posture-alert {
       position: fixed;
-      bottom: 80px; left: 50%;
+      bottom: 32px;
+      left: 50%;
       transform: translateX(-50%) translateY(20px);
       background: rgba(147, 51, 234, 0.95);
       color: white;
-      padding: 14px 28px;
-      border-radius: 14px;
-      font-size: 16px;
-      font-weight: 600;
+      padding: 16px 36px;
+      border-radius: 16px;
+      font-size: 18px;
+      font-weight: 700;
+      letter-spacing: -0.3px;
       opacity: 0;
-      transition: all 0.3s ease;
+      transition: all 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
       z-index: 9999;
       pointer-events: none;
-      box-shadow: 0 10px 30px rgba(147, 51, 234, 0.3);
+      box-shadow: 0 8px 32px rgba(147, 51, 234, 0.4), 0 0 0 1px rgba(255,255,255,0.1) inset;
+      backdrop-filter: blur(12px);
+      white-space: nowrap;
+      max-width: 80vw;
     }
     .posture-alert.active {
       opacity: 1;
       transform: translateX(-50%) translateY(0);
+      animation: posture-pulse 2s ease-in-out infinite;
+    }
+    .posture-alert.level-2 {
+      background: rgba(220, 38, 38, 0.95);
+      box-shadow: 0 8px 32px rgba(220, 38, 38, 0.5), 0 0 0 1px rgba(255,255,255,0.15) inset;
+      animation: posture-pulse-danger 1.2s ease-in-out infinite;
+    }
+    @keyframes posture-pulse {
+      0%, 100% { box-shadow: 0 8px 32px rgba(147, 51, 234, 0.4), 0 0 0 1px rgba(255,255,255,0.1) inset; }
+      50% { box-shadow: 0 8px 48px rgba(147, 51, 234, 0.6), 0 0 0 1px rgba(255,255,255,0.2) inset; }
+    }
+    @keyframes posture-pulse-danger {
+      0%, 100% { box-shadow: 0 8px 32px rgba(220, 38, 38, 0.5), 0 0 0 1px rgba(255,255,255,0.15) inset; transform: translateX(-50%) translateY(0) scale(1); }
+      50% { box-shadow: 0 8px 48px rgba(220, 38, 38, 0.7), 0 0 0 1px rgba(255,255,255,0.25) inset; transform: translateX(-50%) translateY(0) scale(1.02); }
     }
 
     /* ─── Celebration overlay ─── */
@@ -351,6 +370,70 @@
       100% { opacity: 0; transform: translateY(-300px) scale(0.5) rotate(180deg); }
     }
 
+    /* ─── Face-lost countdown timer ─── */
+    .face-lost-timer {
+      position: fixed;
+      bottom: 32px;
+      left: 50%;
+      transform: translateX(-50%) translateY(20px);
+      background: rgba(30, 58, 138, 0.92);
+      color: white;
+      padding: 14px 32px;
+      border-radius: 16px;
+      font-size: 16px;
+      font-weight: 700;
+      letter-spacing: -0.3px;
+      opacity: 0;
+      transition: all 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+      z-index: 9998;
+      pointer-events: none;
+      box-shadow: 0 8px 32px rgba(30, 58, 138, 0.4), 0 0 0 1px rgba(255,255,255,0.1) inset;
+      backdrop-filter: blur(12px);
+      white-space: nowrap;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .face-lost-timer.active {
+      opacity: 1;
+      transform: translateX(-50%) translateY(0);
+    }
+    .face-lost-timer .timer-icon {
+      font-size: 22px;
+    }
+    .face-lost-timer .timer-text {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+    .face-lost-timer .timer-label {
+      font-size: 12px;
+      font-weight: 500;
+      opacity: 0.75;
+    }
+    .face-lost-timer .timer-countdown {
+      font-size: 20px;
+      font-weight: 900;
+      font-family: 'SF Mono', 'Menlo', monospace;
+      letter-spacing: 1px;
+    }
+    .face-lost-timer .timer-bar {
+      position: absolute;
+      bottom: 0;
+      left: 8%;
+      right: 8%;
+      height: 3px;
+      border-radius: 2px;
+      background: rgba(255,255,255,0.2);
+      overflow: hidden;
+    }
+    .face-lost-timer .timer-bar-fill {
+      height: 100%;
+      border-radius: 2px;
+      background: rgba(96, 165, 250, 0.9);
+      transition: width 0.5s linear;
+    }
+
     /* ─── Animations ─── */
     @keyframes flash-bar {
       0%, 100% { opacity: 0.6; }
@@ -388,6 +471,16 @@
       <button class="break-dismiss" id="breakDismissBtn" onclick="dismissBreak()">휴식 종료</button>
     </div>
   </div>
+  <div class="face-lost-timer" id="faceLostTimer">
+    <span class="timer-icon">👀</span>
+    <div class="timer-text">
+      <span class="timer-label">얼굴이 감지되지 않습니다</span>
+      <span class="timer-countdown" id="faceLostCountdown">0:00</span>
+    </div>
+    <div class="timer-bar">
+      <div class="timer-bar-fill" id="faceLostBarFill" style="width: 0%"></div>
+    </div>
+  </div>
   <div class="posture-alert" id="postureAlert">
     🧘 자세를 바르게 해주세요
   </div>
@@ -413,9 +506,13 @@
     const breakEl = document.getElementById('breakReminder');
     const postureEl = document.getElementById('postureAlert');
     const warningMsgEl = document.getElementById('warningMessage');
+    const faceLostEl = document.getElementById('faceLostTimer');
+    const faceLostCountdownEl = document.getElementById('faceLostCountdown');
+    const faceLostBarFillEl = document.getElementById('faceLostBarFill');
 
     let breakTimeout = null;
     let postureTimeout = null;
+    let faceLostTotalSec = 0; // total duration for progress bar
 
     // Warning messages per level (set from main process)
     let warningMessages = ['', '', ''];
@@ -607,13 +704,45 @@
 
     window.dismissBreak = dismissBreak;
 
-    window.showPostureAlert = function() {
-      playBeep(700, 0.2, 0.15);
+    window.showPostureAlert = function(message, level) {
+      var msg = message || '자세를 바르게 해주세요';
+      var lvl = level || 1;
+      postureEl.textContent = '🧘 ' + msg;
+      postureEl.classList.remove('level-2');
+      if (lvl >= 2) postureEl.classList.add('level-2');
+      playBeep(lvl >= 2 ? 800 : 700, 0.2, 0.15);
       postureEl.classList.add('active');
       if (postureTimeout) clearTimeout(postureTimeout);
+      // Keep visible longer — posture issues persist, auto-hide after 8s
       postureTimeout = setTimeout(() => {
-        postureEl.classList.remove('active');
-      }, 5000);
+        postureEl.classList.remove('active', 'level-2');
+      }, 8000);
+    };
+
+    // ─── Face-lost countdown timer ───
+    window.showFaceLostTimer = function(remainingSec, elapsedSec) {
+      if (remainingSec <= 0) {
+        faceLostEl.classList.remove('active');
+        faceLostTotalSec = 0;
+        return;
+      }
+
+      // Track total duration for progress bar
+      var totalSec = elapsedSec + remainingSec;
+      if (faceLostTotalSec === 0 || Math.abs(totalSec - faceLostTotalSec) > 2) {
+        faceLostTotalSec = totalSec;
+      }
+
+      // Format countdown: m:ss
+      var min = Math.floor(remainingSec / 60);
+      var sec = Math.floor(remainingSec % 60);
+      faceLostCountdownEl.textContent = min + ':' + String(sec).padStart(2, '0');
+
+      // Progress bar: fills as time passes (elapsed / total)
+      var pct = faceLostTotalSec > 0 ? Math.min(100, (elapsedSec / faceLostTotalSec) * 100) : 0;
+      faceLostBarFillEl.style.width = pct + '%';
+
+      faceLostEl.classList.add('active');
     };
 
     // ─── Celebration effect ───
@@ -651,7 +780,7 @@
 
       const badge = document.getElementById('celBadge');
       var lvl = data.level || 0;
-      badge.textContent = 'Rank ' + (lvl > 0 ? '+' + lvl : lvl);
+      badge.textContent = data.step_label || data.name || '';
       badge.style.backgroundColor = color + '30';
       badge.style.color = color;
       badge.style.border = '1px solid ' + color + '50';

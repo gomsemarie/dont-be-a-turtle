@@ -5,6 +5,7 @@ const ipcRenderer = (window as any).electronAPI;
 export interface TurtleRank {
   level: number;
   name: string;
+  step_label?: string;
   emoji: string;
   image?: string;
   description: string;
@@ -89,7 +90,8 @@ export const useCelebrationStore = create<CelebrationState>((set, get) => ({
   },
 
   triggerCelebration: (direction, rank) => {
-    set({ celebration: { direction, rank } });
+    // Always create a new object so zustand detects the change on repeated clicks
+    set({ celebration: { direction, rank: { ...rank } } });
     sendCelebrationIPC(direction, rank);
   },
 

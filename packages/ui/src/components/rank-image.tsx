@@ -1,6 +1,10 @@
 import React from "react";
 import type { TurtleRank } from "@/stores/use-rank-store";
 
+/** Global cache-bust counter; incremented when rank images are saved. */
+let imageCacheBust = Date.now();
+export function bumpImageCache() { imageCacheBust = Date.now(); }
+
 interface RankImageProps {
   rank: TurtleRank;
   /** CSS size (e.g., "48px", "5rem"). Applied to both width and height. */
@@ -20,13 +24,14 @@ export const RankImage: React.FC<RankImageProps> = ({
   if (rank.image) {
     return (
       <img
-        src={`./ranks/${rank.image}`}
+        src={`./ranks/${rank.image}?v=${imageCacheBust}`}
         alt={rank.name}
         className={className}
         style={{
           width: size,
           height: size,
           objectFit: "contain",
+          imageRendering: "pixelated",
           filter: `drop-shadow(0 0 8px ${rank.color}40)`,
         }}
         draggable={false}

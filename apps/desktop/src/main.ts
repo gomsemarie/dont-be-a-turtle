@@ -2,20 +2,22 @@
  * 거북이 키우기 Electron Main Process
  */
 
-import { app, BrowserWindow, ipcMain, screen, Notification } from "electron";
+import { app, BrowserWindow, ipcMain, screen, Notification, shell } from "electron";
 import path from "path";
 import fs from "fs";
 import http from "http";
 import { IncomingMessage } from "http";
 import { startBackend, stopBackend, BACKEND_PORT } from "./python-manager";
 import { createTray, updateTrayState, updateTrayMonitoring, destroyTray } from "./tray";
-import { showWarning, hideWarning, showBreakReminder, showPostureAlert, showCelebration, setWarningMessages, destroyOverlay } from "./overlay";
+import { showWarning, hideWarning, showBreakReminder, showPostureAlert, showFaceLostTimer, showCelebration, setWarningMessages, destroyOverlay } from "./overlay";
 
 let mainWindow: BrowserWindow | null = null;
 let isQuitting = false;
 let monitoringActive = false;
 let lastNotifiedLevel = 0;
 let lastNotificationTime = 0;
+let autoBreakShown = false;
+let breakReminderShown = false;
 
 const isDev = !app.isPackaged;
 
@@ -172,16 +174,24 @@ function createSplashWindow(): BrowserWindow {
 
 // ─── Window ───────────────────────────────────────────────────
 
+function getAppIconPath(): string {
+  if (isDev) {
+    return path.join(__dirname, "..", "..", "resources", "icon.png");
+  }
+  return path.join(process.resourcesPath, "..", "resources", "icon.png");
+}
+
 function createMainWindow(): BrowserWindow {
   const win = new BrowserWindow({
-    width: 480,
+    width: 520,
     height: 740,
-    minWidth: 540,
+    minWidth: 480,
     minHeight: 600,
     frame: false,
     titleBarStyle: "hidden",
     trafficLightPosition: { x: -100, y: -100 },
     backgroundColor: "#09090b",
+    icon: getAppIconPath(),
     webPreferences: {
       preload: path.join(__dirname, "preload.js"),
       contextIsolation: true,
@@ -281,6 +291,49 @@ function createSSEClient(
   };
 }
 
+// ─── Types & Parsing ──────────────────────────────────────────
+
+interface DistanceEvent {
+  face_detected: boolean;
+  distance_cm: number;
+  warning_level: number;
+  raw_warning_level: number;
+  grace_remaining: number;
+  posture_alert: boolean;
+  posture_message: string;
+  posture_warning_level: number;
+  elapsed_min: number;
+  needs_break: boolean;
+  auto_break_active: boolean;
+  face_lost_elapsed_sec: number;
+  auto_break_remaining_sec: number;
+  rank_event?: any;
+}
+
+function parseDistanceEvent(data: string): DistanceEvent | null {
+  try {
+    const parsed = JSON.parse(data);
+    return {
+      face_detected: parsed.face_detected ?? false,
+      distance_cm: parsed.distance_cm ?? 0,
+      warning_level: parsed.warning_level ?? 0,
+      raw_warning_level: parsed.raw_warning_level ?? 0,
+      grace_remaining: parsed.grace_remaining ?? 0,
+      posture_alert: parsed.posture_alert ?? false,
+      posture_message: parsed.posture_message ?? "",
+      posture_warning_level: parsed.posture_warning_level ?? 0,
+      elapsed_min: parsed.elapsed_min ?? 0,
+      needs_break: parsed.needs_break ?? false,
+      auto_break_active: parsed.auto_break_active ?? false,
+      face_lost_elapsed_sec: parsed.face_lost_elapsed_sec ?? 0,
+      auto_break_remaining_sec: parsed.auto_break_remaining_sec ?? 0,
+      rank_event: parsed.rank_event,
+    };
+  } catch {
+    return null;
+  }
+}
+
 // ─── Monitoring ───────────────────────────────────────────────
 
 async function startMonitoringLoop(): Promise<void> {
@@ -301,63 +354,76 @@ async function startMonitoringLoop(): Promise<void> {
     url,
     (eventName, data) => {
       if (eventName === "distance") {
-        try {
-          const parsed = JSON.parse(data);
-          const level = parsed.warning_level || 0;
-          const rawLevel = parsed.raw_warning_level || 0;
+        const ev = parseDistanceEvent(data);
+        if (!ev) return;
 
-          // Update tray
-          const states = ["safe", "caution", "warning", "danger"] as const;
-          updateTrayState(states[level] || "safe");
+        // Update tray
+        const states = ["safe", "caution", "warning", "danger"] as const;
+        updateTrayState(states[ev.warning_level] || "safe");
 
-          // Overlay
-          showWarning(level);
+        // Overlay
+        showWarning(ev.warning_level);
 
-          // OS notification
-          if (level > 0) {
-            sendOSNotification(level);
-          } else {
-            resetNotificationState();
-          }
-
-          // IPC to renderer: level, dist, msg, grace, rawLevel, posture, breakInfo
-          const warningMsg = level > 0 ? (customWarningMessages[level - 1] || "") : "";
-          const graceRemaining = parsed.grace_remaining || 0;
-          const postureAlert = parsed.posture_alert || false;
-          const elapsedMin = parsed.elapsed_min || 0;
-          const needsBreak = parsed.needs_break || false;
-
-          if (mainWindow && !mainWindow.isDestroyed()) {
-            mainWindow.webContents.send("warning-level-changed", level, parsed.distance_cm, warningMsg, graceRemaining, rawLevel, postureAlert);
-            mainWindow.webContents.send("break-status", elapsedMin, needsBreak);
-          }
-
-          // Rank change event from backend
-          if (parsed.rank_event) {
-            const re = parsed.rank_event;
-            const celebrationData = {
-              direction: re.direction,
-              emoji: re.rank.emoji,
-              image: re.rank.image,
-              name: re.rank.name,
-              level: re.rank.level,
-              description: re.rank.description,
-              color: re.rank.color,
-            };
-            // Show full-screen overlay celebration
-            showCelebration(celebrationData);
-            // Also notify renderer for in-app celebration
-            if (mainWindow && !mainWindow.isDestroyed()) {
-              mainWindow.webContents.send("rank-changed", celebrationData);
-            }
-          }
-
-          // Overlay break/posture
-          if (needsBreak) showBreakReminder(currentRankData || undefined, breakChaosLevel);
-          if (postureAlert) showPostureAlert();
-        } catch {
-          // ignore parse errors
+        // OS notification
+        if (ev.warning_level > 0) {
+          sendOSNotification(ev.warning_level);
+        } else {
+          resetNotificationState();
         }
+
+        // IPC to renderer: level, dist, msg, grace, rawLevel, posture, breakInfo
+        const warningMsg = ev.warning_level > 0 ? (customWarningMessages[ev.warning_level - 1] || "") : "";
+
+        if (mainWindow && !mainWindow.isDestroyed()) {
+          mainWindow.webContents.send("warning-level-changed", ev.warning_level, ev.distance_cm, warningMsg, ev.grace_remaining, ev.raw_warning_level, ev.posture_alert, ev.posture_message, ev.posture_warning_level);
+          mainWindow.webContents.send("break-status", ev.elapsed_min, ev.needs_break, ev.auto_break_active);
+          mainWindow.webContents.send("face-lost-timer", ev.face_lost_elapsed_sec, ev.auto_break_remaining_sec);
+        }
+
+        // Show face-lost countdown on overlay when face is undetected
+        if (ev.face_lost_elapsed_sec > 0 && ev.auto_break_remaining_sec > 0) {
+          showFaceLostTimer(ev.auto_break_remaining_sec, ev.face_lost_elapsed_sec);
+        } else {
+          showFaceLostTimer(0, 0);
+        }
+
+        // Auto-break: show break reminder overlay when rest mode activates (once)
+        if (ev.auto_break_active && !autoBreakShown) {
+          autoBreakShown = true;
+          showBreakReminder(currentRankData || undefined, breakChaosLevel);
+        } else if (!ev.auto_break_active) {
+          autoBreakShown = false;
+        }
+
+        // Rank change event from backend
+        if (ev.rank_event) {
+          const re = ev.rank_event;
+          const celebrationData = {
+            direction: re.direction,
+            emoji: re.rank.emoji,
+            image: re.rank.image,
+            name: re.rank.name,
+            level: re.rank.level,
+            step_label: re.rank.step_label,
+            description: re.rank.description,
+            color: re.rank.color,
+          };
+          // Show full-screen overlay celebration
+          showCelebration(celebrationData);
+          // Also notify renderer for in-app celebration
+          if (mainWindow && !mainWindow.isDestroyed()) {
+            mainWindow.webContents.send("rank-changed", celebrationData);
+          }
+        }
+
+        // Overlay break/posture (guard: only show once per break cycle)
+        if (ev.needs_break && !breakReminderShown) {
+          breakReminderShown = true;
+          showBreakReminder(currentRankData || undefined, breakChaosLevel);
+        } else if (!ev.needs_break) {
+          breakReminderShown = false;
+        }
+        if (ev.posture_alert) showPostureAlert(ev.posture_message, ev.posture_warning_level);
       } else if (eventName === "stopped") {
         client.close();
         (global as any).__monitoringSSE = null;
@@ -492,6 +558,12 @@ app.whenReady().then(async () => {
   ipcMain.on("monitoring-stopped", () => stopMonitoringLoop());
   ipcMain.on("show-celebration", (_event: any, data: any) => {
     showCelebration(data);
+  });
+  ipcMain.on("open-external-url", (_event: any, url: string) => {
+    // Only allow https GitHub URLs for safety
+    if (url && typeof url === "string" && url.startsWith("https://github.com/")) {
+      shell.openExternal(url);
+    }
   });
   ipcMain.on("trigger-break", async () => {
     // Must sync first to get latest rank data (image) + chaos level from backend

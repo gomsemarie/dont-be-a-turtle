@@ -10,34 +10,43 @@ import type { TurtleRank } from "@/stores/use-rank-store";
  */
 export const RankCelebration: React.FC = () => {
   const { celebration, clearCelebration } = useCelebrationStore();
-  const lastShownRef = useRef<string | null>(null);
+  const activeToastRef = useRef<string | number | null>(null);
 
   useEffect(() => {
     if (!celebration) return;
 
-    // Deduplicate: don't show same celebration twice
-    const key = `${celebration.direction}-${celebration.rank.level}`;
-    if (lastShownRef.current === key) return;
-    lastShownRef.current = key;
-
     const { direction, rank } = celebration;
     const isUp = direction === "up";
 
-    toast.custom(
-      (id: string | number) => (
-        <RankToastCard
-          rank={rank}
-          isUp={isUp}
-          onDismiss={() => toast.dismiss(id)}
-        />
-      ),
-      {
-        duration: 5000,
-        position: "bottom-center",
-      }
-    );
+    // Dismiss previous toast first so timer resets
+    if (activeToastRef.current != null) {
+      toast.dismiss(activeToastRef.current);
+      activeToastRef.current = null;
+    }
+
+    // Small delay so dismiss animation completes before new toast
+    const timer = setTimeout(() => {
+      const id = toast.custom(
+        (tid: string | number) => (
+          <RankToastCard
+            rank={rank}
+            isUp={isUp}
+            onDismiss={() => {
+              toast.dismiss(tid);
+              activeToastRef.current = null;
+            }}
+          />
+        ),
+        {
+          duration: 5000,
+          position: "bottom-center",
+        }
+      );
+      activeToastRef.current = id;
+    }, 80);
 
     clearCelebration();
+    return () => clearTimeout(timer);
   }, [celebration, clearCelebration]);
 
   return null;
@@ -83,7 +92,7 @@ function RankToastCard({
                 color: rank.color,
               }}
             >
-              Rank {rank.level > 0 ? `+${rank.level}` : rank.level}
+              {rank.step_label ?? rank.name}
             </span>
           </div>
           <p className="text-sm font-black truncate" style={{ color: rank.color }}>

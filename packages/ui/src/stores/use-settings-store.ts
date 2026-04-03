@@ -31,6 +31,14 @@ export interface Settings {
   history_retention_days: number;
   history_max_events: number;
   score_multiplier: number;
+  posture_forward_head_threshold: number;
+  posture_slouch_threshold: number;
+  posture_lateral_tilt_threshold: number;
+  posture_check_interval_sec: number;
+  posture_calibration: Record<string, unknown>;
+  auto_break_enabled: boolean;
+  auto_break_minutes: number;
+  admin_mode: boolean;
 }
 
 interface SettingsState {

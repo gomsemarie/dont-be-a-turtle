@@ -3,6 +3,7 @@
     {
       "level": -5,
       "name": "화석 예약 완료",
+      "step_label": "압도적으로 부정적",
       "emoji": "🪦",
       "image": "rank-neg5.png",
       "description": "국립중앙박물관에서 전시 섭외 연락 옴",
@@ -13,6 +14,7 @@
     {
       "level": -4,
       "name": "척추과 단골",
+      "step_label": "매우 부정적",
       "emoji": "🏥",
       "image": "rank-neg4.png",
       "description": "정형외과 의사가 당신 보고 눈물 흘림",
@@ -23,6 +25,7 @@
     {
       "level": -3,
       "name": "목 꺾인 백조",
+      "step_label": "부정적",
       "emoji": "🦢",
       "image": "rank-neg3.png",
       "description": "우아하게 구부러진 자세... 는 아닙니다",
@@ -33,6 +36,7 @@
     {
       "level": -2,
       "name": "슬슬 굽는 중",
+      "step_label": "대체로 부정적",
       "emoji": "🫠",
       "image": "rank-neg2.png",
       "description": "자세가 슬금슬금 무너지고 있어요",
@@ -43,6 +47,7 @@
     {
       "level": -1,
       "name": "살짝 위험",
+      "step_label": "약간 부정적",
       "emoji": "🤨",
       "image": "rank-neg1.png",
       "description": "아직은 괜찮지만 조금 신경 쓰세요",
@@ -53,6 +58,7 @@
     {
       "level": 0,
       "name": "평범한 사람",
+      "step_label": "복합적",
       "emoji": "😐",
       "image": "rank-0.png",
       "description": "아직 판단하기엔 이른 상태",
@@ -63,6 +69,7 @@
     {
       "level": 1,
       "name": "자세 의식 중",
+      "step_label": "약간 긍정적",
       "emoji": "🧘",
       "image": "rank-pos1.png",
       "description": "자세에 관심을 갖기 시작했군요!",
@@ -73,6 +80,7 @@
     {
       "level": 2,
       "name": "꼿꼿한 등",
+      "step_label": "대체로 긍정적",
       "emoji": "💪",
       "image": "rank-pos2.png",
       "description": "등이 일자로 펴지기 시작합니다",
@@ -83,6 +91,7 @@
     {
       "level": 3,
       "name": "자세 교관",
+      "step_label": "긍정적",
       "emoji": "🎖️",
       "image": "rank-pos3.png",
       "description": "당신의 자세를 보고 군인들이 경례합니다",
@@ -93,6 +102,7 @@
     {
       "level": 4,
       "name": "자세 달인",
+      "step_label": "매우 긍정적",
       "emoji": "✨",
       "image": "rank-pos4.png",
       "description": "정형외과 의사가 당신을 모델로 삼고 싶어 함",
@@ -103,6 +113,7 @@
     {
       "level": 5,
       "name": "자세의 신",
+      "step_label": "압도적으로 긍정적",
       "emoji": "👑",
       "image": "rank-pos5.png",
       "description": "완벽한 자세의 화신. 전설이 되었습니다",

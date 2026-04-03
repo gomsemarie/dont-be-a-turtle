@@ -129,6 +129,17 @@ class AppSettings(BaseModel):
     score_multiplier: float = Field(default_factory=lambda: _d("score_multiplier", 1.0))
     # Custom warning messages per level
     warning_messages: list[str] = Field(default_factory=_default_warning_messages)
+    # Posture analysis (MediaPipe Pose)
+    posture_forward_head_threshold: float = Field(default_factory=lambda: _d("posture_forward_head_threshold", 0.06))
+    posture_slouch_threshold: float = Field(default_factory=lambda: _d("posture_slouch_threshold", 0.08))
+    posture_lateral_tilt_threshold: float = Field(default_factory=lambda: _d("posture_lateral_tilt_threshold", 6.0))
+    posture_check_interval_sec: float = Field(default_factory=lambda: _d("posture_check_interval_sec", 1.0))
+    posture_calibration: dict = Field(default_factory=lambda: _d("posture_calibration", {}))
+    # Auto-break: trigger break when face undetected for N minutes
+    auto_break_enabled: bool = Field(default_factory=lambda: _d("auto_break_enabled", True))
+    auto_break_minutes: float = Field(default_factory=lambda: _d("auto_break_minutes", 3.0))
+    # Pixel editor tab visibility
+    admin_mode: bool = Field(default_factory=lambda: _d("admin_mode", False))
 
 
 # ─── File I/O ─────────────────────────────────────────────────

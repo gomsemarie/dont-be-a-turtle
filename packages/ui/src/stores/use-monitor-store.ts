@@ -1,23 +1,19 @@
-import { create } from "zustand";
+import { useNotificationStore } from "./use-notification-store";
 
-const ipcRenderer = (window as any).electronAPI;
-
-interface MonitorState {
-  /** Break reminder: minutes elapsed since monitoring started */
-  breakElapsedMin: number;
-  /** Break reminder: whether it's time to take a break */
-  needsBreak: boolean;
-  /** Initialize IPC listeners (call once) */
-  initIPC: () => void;
-}
-
-export const useMonitorStore = create<MonitorState>((set) => ({
-  breakElapsedMin: 0,
-  needsBreak: false,
-
-  initIPC: () => {
-    ipcRenderer?.on("break-status", (elapsed: number, needs: boolean) => {
-      set({ breakElapsedMin: elapsed, needsBreak: needs });
-    });
-  },
-}));
+/**
+ * Deprecated: useMonitorStore is now a thin wrapper around useNotificationStore.
+ * All monitor-related state has been moved to the unified notification store.
+ *
+ * This export is kept for backwards compatibility.
+ */
+export const useMonitorStore = () => {
+  const store = useNotificationStore();
+  return {
+    breakElapsedMin: store.breakElapsedMin,
+    needsBreak: store.needsBreak,
+    autoBreakActive: store.autoBreakActive,
+    faceLostElapsedSec: store.faceLostElapsedSec,
+    autoBreakRemainingSec: store.autoBreakRemainingSec,
+    initIPC: store.initIPC,
+  };
+};

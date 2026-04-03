@@ -11,7 +11,7 @@ from typing import AsyncGenerator
 
 import cv2
 import numpy as np
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, UploadFile, File, Request
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from sse_starlette.sse import EventSourceResponse
@@ -45,12 +45,18 @@ _APP_CONFIG = _load_app_config()
 APP_VERSION = _APP_CONFIG.get("app", {}).get("version", "1.2.0")
 APP_NAME = _APP_CONFIG.get("app", {}).get("name", "거북이 키우기")
 from history import WarningHistory
+from posture import PostureAnalyzer, PostureCalibration
 from turtle_rank import get_full_rank_info, load_ranks, load_scoring_rules, reset_score_state, add_good_posture_time
 
 
 # Global instances
 camera_manager = CameraManager()
 face_detector = FaceDetector()
+try:
+    posture_analyzer = PostureAnalyzer()
+except Exception as e:
+    print(f"[Posture] 초기화 실패 (자세 감지 비활성화): {e}")
+    posture_analyzer = None  # type: ignore
 settings = load_settings()
 # Reset monitoring flag on startup (monitoring doesn't survive restarts)
 if settings.monitoring_active:
@@ -61,6 +67,10 @@ warning_history = WarningHistory()
 # Monitoring state
 monitoring_active = False
 break_timer_start: float = 0.0
+
+# Shared posture state (written by distance stream, read by preview stream)
+_posture_data: dict = {}
+_active_posture_level: int = 0
 
 
 @asynccontextmanager
@@ -78,6 +88,16 @@ async def lifespan(app: FastAPI):
     # Apply face yaw threshold
     face_detector.set_face_yaw_threshold(settings.face_yaw_threshold_deg)
 
+    # Restore posture calibration & thresholds
+    if posture_analyzer:
+        if settings.posture_calibration:
+            posture_analyzer.set_calibration(PostureCalibration.from_dict(settings.posture_calibration))
+        posture_analyzer.set_thresholds(
+            forward_head=settings.posture_forward_head_threshold,
+            slouch=settings.posture_slouch_threshold,
+            lateral_tilt=settings.posture_lateral_tilt_threshold,
+        )
+
     # Open saved camera
     if settings.selected_camera_index >= 0:
         camera_manager.select_camera(settings.selected_camera_index)
@@ -87,6 +107,8 @@ async def lifespan(app: FastAPI):
     # Cleanup
     camera_manager.release()
     face_detector.release()
+    if posture_analyzer:
+        posture_analyzer.release()
 
 
 app = FastAPI(title=f"{APP_NAME} Backend", version=APP_VERSION, lifespan=lifespan)
@@ -203,6 +225,13 @@ class UpdateSettingsRequest(BaseModel):
     history_retention_days: int | None = None
     history_max_events: int | None = None
     score_multiplier: float | None = None
+    posture_forward_head_threshold: float | None = None
+    posture_slouch_threshold: float | None = None
+    posture_lateral_tilt_threshold: float | None = None
+    posture_check_interval_sec: float | None = None
+    auto_break_enabled: bool | None = None
+    auto_break_minutes: float | None = None
+    admin_mode: bool | None = None
 
 
 @app.put("/api/settings")
@@ -242,6 +271,26 @@ async def update_settings(req: UpdateSettingsRequest):
         settings.history_max_events = max(100, min(req.history_max_events, 50000))
     if req.score_multiplier is not None:
         settings.score_multiplier = max(0.1, min(req.score_multiplier, 10.0))
+    if req.posture_forward_head_threshold is not None:
+        settings.posture_forward_head_threshold = max(0.02, min(req.posture_forward_head_threshold, 0.5))
+        if posture_analyzer:
+            posture_analyzer.set_thresholds(forward_head=settings.posture_forward_head_threshold)
+    if req.posture_slouch_threshold is not None:
+        settings.posture_slouch_threshold = max(0.02, min(req.posture_slouch_threshold, 0.5))
+        if posture_analyzer:
+            posture_analyzer.set_thresholds(slouch=settings.posture_slouch_threshold)
+    if req.posture_lateral_tilt_threshold is not None:
+        settings.posture_lateral_tilt_threshold = max(2.0, min(req.posture_lateral_tilt_threshold, 20.0))
+        if posture_analyzer:
+            posture_analyzer.set_thresholds(lateral_tilt=settings.posture_lateral_tilt_threshold)
+    if req.posture_check_interval_sec is not None:
+        settings.posture_check_interval_sec = max(0.3, min(req.posture_check_interval_sec, 10.0))
+    if req.auto_break_enabled is not None:
+        settings.auto_break_enabled = req.auto_break_enabled
+    if req.auto_break_minutes is not None:
+        settings.auto_break_minutes = max(1.0, min(req.auto_break_minutes, 30.0))
+    if req.admin_mode is not None:
+        settings.admin_mode = req.admin_mode
 
     save_settings(settings)
     return {"success": True}
@@ -268,6 +317,59 @@ async def stop_monitoring():
     settings.monitoring_active = False
     save_settings(settings)
     return {"success": True}
+
+
+# ─── Posture Calibration ─────────────────────────────────────────────
+
+@app.post("/api/posture/calibrate")
+async def start_posture_calibration():
+    """Start posture calibration — user should sit in good posture.
+
+    Runs an independent background loop that reads camera frames and
+    feeds them to the posture analyzer for 3 seconds, so calibration
+    works even when monitoring is not active.
+    """
+    if not posture_analyzer:
+        raise HTTPException(status_code=503, detail="Posture analyzer not available")
+    if not camera_manager.is_open:
+        raise HTTPException(status_code=400, detail="No camera selected")
+    if posture_analyzer.is_calibrating():
+        return {"success": False, "message": "Calibration already in progress"}
+
+    cal_duration = 3.0
+    posture_analyzer.start_calibration(duration=cal_duration)
+
+    # Background task: feed frames to analyzer during calibration period
+    async def _calibration_loop():
+        import time as _time
+        end_time = _time.time() + cal_duration + 0.5  # small buffer
+        while _time.time() < end_time and posture_analyzer.is_calibrating():
+            frame = camera_manager.read_frame()
+            if frame is not None:
+                posture_analyzer.analyze(frame)
+            await asyncio.sleep(0.15)  # ~7fps
+        # Save calibration to settings if successful
+        if posture_analyzer.calibration.is_calibrated:
+            settings.posture_calibration = posture_analyzer.calibration.to_dict()
+            save_settings(settings)
+
+    asyncio.create_task(_calibration_loop())
+    return {"success": True, "message": "Posture calibration started — sit up straight!", "duration": cal_duration}
+
+
+@app.get("/api/posture/calibration")
+async def get_posture_calibration():
+    """Get posture calibration state."""
+    if not posture_analyzer:
+        return {"is_calibrated": False, "is_calibrating": False, "progress": 0, "calibration": None, "available": False}
+    cal = posture_analyzer.calibration
+    return {
+        "is_calibrated": cal.is_calibrated,
+        "is_calibrating": posture_analyzer.is_calibrating(),
+        "progress": round(posture_analyzer.calibration_progress(), 2),
+        "calibration": cal.to_dict() if cal.is_calibrated else None,
+        "available": True,
+    }
 
 
 @app.post("/api/break/trigger")
@@ -354,10 +456,184 @@ async def get_rank_config():
     }
 
 
+@app.put("/api/rank/config")
+async def update_rank_config(request: Request):
+    """Update rank definitions and/or scoring rules."""
+    body = await request.json()
+    from config import get_config_path
+    data_dir = get_config_path().parent
+
+    if "ranks" in body:
+        ranks = body["ranks"]
+        ranks_path = data_dir / "turtle_ranks.json"
+        ranks_path.write_text(
+            json.dumps({"ranks": ranks}, indent=2, ensure_ascii=False),
+            encoding="utf-8"
+        )
+
+    if "scoring_rules" in body:
+        rules = body["scoring_rules"]
+        rules_path = data_dir / "scoring_rules.json"
+        rules_path.write_text(
+            json.dumps(rules, indent=2, ensure_ascii=False),
+            encoding="utf-8"
+        )
+
+    return {"success": True}
+
+
+@app.get("/api/ranks")
+async def get_ranks():
+    """Get list of all ranks for the pixel editor rank selector."""
+    ranks = load_ranks()
+    return {"ranks": ranks}
+
+
+@app.post("/api/ranks/{level}/image")
+async def upload_rank_image(level: int, file: UploadFile = File(...)):
+    """Upload a rank image (PNG, 32x32 or 64x64 pixels)."""
+    # Validate file is provided
+    if not file or not file.filename:
+        raise HTTPException(status_code=400, detail="No file provided")
+
+    # Read file contents
+    try:
+        contents = await file.read()
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Failed to read file: {str(e)}")
+
+    # Validate PNG format
+    if not contents.startswith(b'\x89PNG'):
+        raise HTTPException(status_code=400, detail="File is not a valid PNG image")
+
+    # Load and validate image dimensions using cv2
+    try:
+        import tempfile
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".png") as tmp:
+            tmp.write(contents)
+            tmp_path = tmp.name
+
+        img = cv2.imread(tmp_path)
+        Path(tmp_path).unlink()  # Clean up temp file
+
+        if img is None:
+            raise HTTPException(status_code=400, detail="Failed to read image data")
+
+        height, width = img.shape[:2]
+        if width not in (32, 64) or height not in (32, 64) or width != height:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Image dimensions must be 32x32 or 64x64 pixels, got {width}x{height}"
+            )
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Invalid image file: {str(e)}")
+
+    # Determine filename based on level
+    if level >= 0:
+        if level == 0:
+            filename = "rank-0.png"
+        else:
+            filename = f"rank-pos{level}.png"
+    else:
+        filename = f"rank-neg{abs(level)}.png"
+
+    # Get project root (2 levels up from backend main.py)
+    backend_dir = Path(__file__).parent
+    project_root = backend_dir.parent.parent
+    ranks_dir = project_root / "packages/ui/public/ranks"
+
+    # Ensure directory exists
+    ranks_dir.mkdir(parents=True, exist_ok=True)
+
+    # Save the image
+    target_path = ranks_dir / filename
+    try:
+        target_path.write_bytes(contents)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to save image: {str(e)}")
+
+    # Update turtle_ranks.json to set the image field for this rank
+    try:
+        ranks = load_ranks()
+        for rank in ranks:
+            if rank.get("level") == level:
+                rank["image"] = filename
+                break
+
+        # Save updated ranks back to data directory
+        from config import get_config_path
+        data_dir = get_config_path().parent
+        ranks_json_path = data_dir / "turtle_ranks.json"
+        ranks_json_path.write_text(
+            json.dumps({"ranks": ranks}, indent=2, ensure_ascii=False),
+            encoding="utf-8"
+        )
+    except Exception as e:
+        # Log error but don't fail the upload if we can't update JSON
+        print(f"[Warning] Failed to update turtle_ranks.json: {e}")
+
+    return {
+        "success": True,
+        "filename": filename,
+        "level": level,
+        "path": f"packages/ui/public/ranks/{filename}",
+        "dimensions": {"width": width, "height": height},
+    }
+
+
 @app.get("/api/version")
 async def get_version():
     """Get app version."""
     return {"version": APP_VERSION}
+
+
+GITHUB_REPO = "gomsemarie/dont-be-a-turtle"
+
+@app.get("/api/update/check")
+async def check_update():
+    """Check for updates by comparing current version with latest GitHub release tag."""
+    import urllib.request
+    import urllib.error
+
+    try:
+        url = f"https://api.github.com/repos/{GITHUB_REPO}/releases/latest"
+        req = urllib.request.Request(url, headers={"Accept": "application/vnd.github.v3+json", "User-Agent": "DontBeATurtle"})
+        with urllib.request.urlopen(req, timeout=10) as resp:
+            data = json.loads(resp.read().decode())
+
+        latest_tag = data.get("tag_name", "")
+        # Strip leading 'v' for comparison (e.g. "v1.3.0" → "1.3.0")
+        latest_version = latest_tag.lstrip("v")
+        html_url = data.get("html_url", "")
+        body = data.get("body", "")
+        published = data.get("published_at", "")
+
+        # Simple semver compare
+        def parse_ver(v: str) -> tuple[int, ...]:
+            try:
+                return tuple(int(x) for x in v.split("."))
+            except Exception:
+                return (0,)
+
+        current = parse_ver(APP_VERSION)
+        latest = parse_ver(latest_version)
+        has_update = latest > current
+
+        return {
+            "has_update": has_update,
+            "current_version": APP_VERSION,
+            "latest_version": latest_version,
+            "latest_tag": latest_tag,
+            "release_url": html_url,
+            "release_notes": body[:500] if body else "",
+            "published_at": published,
+        }
+    except urllib.error.URLError:
+        return {"has_update": False, "current_version": APP_VERSION, "error": "네트워크 연결 실패"}
+    except Exception as e:
+        return {"has_update": False, "current_version": APP_VERSION, "error": str(e)}
 
 
 # ─── SSE Streaming Endpoints ──────────────────────────────────────────
@@ -365,12 +641,47 @@ async def get_version():
 
 async def _generate_preview_stream() -> AsyncGenerator[dict, None]:
     """Generate SSE events with preview frames."""
+    global _posture_data, _active_posture_level
     frame_interval = 1.0 / settings.frame_rate
+
+    # Preview-local posture analysis (so it works even when monitoring is off)
+    _preview_last_posture: float = 0.0
+
     while True:
         frame = camera_manager.read_frame()
         if frame is not None:
             result = face_detector.detect(frame)
             frame = face_detector.draw_landmarks(frame, result)
+
+            # Run posture analysis in preview too (every N seconds)
+            now = time.time()
+            posture_interval = settings.posture_check_interval_sec
+            if (
+                posture_analyzer
+                and settings.posture_detection_enabled
+                and result.face_detected
+                and (now - _preview_last_posture) >= posture_interval
+            ):
+                _preview_last_posture = now
+                try:
+                    p_result = posture_analyzer.analyze(frame)
+                    if p_result.detected:
+                        _posture_data = {
+                            "forward_head_ratio": p_result.forward_head_ratio,
+                            "slouch_ratio": p_result.slouch_ratio,
+                            "lateral_tilt_ratio": p_result.lateral_tilt_ratio,
+                            "posture_warning_level": p_result.posture_warning_level,
+                            "posture_message": p_result.posture_message,
+                            "forward_head_warning": p_result.forward_head_warning,
+                            "slouch_warning": p_result.slouch_warning,
+                            "lateral_tilt_warning": p_result.lateral_tilt_warning,
+                            "visibility": round(p_result.visibility, 2),
+                            "landmarks": p_result.landmarks,
+                        }
+                    else:
+                        print(f"[Posture/Preview] Not detected (visibility={p_result.visibility:.2f})")
+                except Exception as e:
+                    print(f"[Posture/Preview] Error: {e}")
 
             # Encode frame as JPEG
             _, buffer = cv2.imencode(".jpg", frame, [cv2.IMWRITE_JPEG_QUALITY, 85])
@@ -384,6 +695,7 @@ async def _generate_preview_stream() -> AsyncGenerator[dict, None]:
                     "distance_cm": result.distance_cm,
                     "ied_pixels": result.ied_pixels,
                     "face_bbox": result.face_bbox if result.face_detected else None,
+                    "posture": _posture_data if _posture_data else None,
                 }),
             }
         else:
@@ -405,12 +717,14 @@ async def stream_preview():
 
 async def _generate_distance_stream() -> AsyncGenerator[dict, None]:
     """Generate SSE events with distance data."""
-    global break_timer_start
+    global break_timer_start, _posture_data, _active_posture_level
     frame_interval = 1.0 / min(settings.frame_rate, 10)  # Max 10 fps for distance
 
     # Grace period tracking: only fire alert after sustained warning
     warning_entered_at: float = 0.0  # timestamp when warning_level first became > 0
     active_alert_level: int = 0  # the level currently being alerted (after grace)
+    warning_exited_at: float = 0.0  # timestamp when warning_level last dropped to 0
+    _GRACE_COOLDOWN: float = 1.5  # seconds: brief dips above threshold don't reset grace
 
     # Track previous rank levels to detect rank changes
     _prev_rank_levels: dict[str, int] = {}
@@ -419,10 +733,42 @@ async def _generate_distance_stream() -> AsyncGenerator[dict, None]:
     _last_good_posture_ts: float = 0.0
     _good_posture_accum: float = 0.0
 
+    # Auto-break: trigger break when face not detected for N minutes
+    _face_lost_at: float = 0.0  # timestamp when face was last lost (0 = face visible)
+    _auto_break_triggered: bool = False  # prevent repeated triggers
+
+    # Posture analysis (runs every N seconds, not every frame)
+    _last_posture_check: float = 0.0
+    _posture_grace_start: float = 0.0
+    _POSTURE_GRACE_SEC: float = 2.0  # 2 second grace for posture warnings
+
     while monitoring_active:
         frame = camera_manager.read_frame()
         if frame is not None:
             result = face_detector.detect(frame)
+
+            # ── Auto-break: face undetected for N minutes → rest mode ──
+            auto_break_active = False
+            face_lost_elapsed_sec = 0.0
+            auto_break_remaining_sec = 0.0
+            if settings.auto_break_enabled:
+                if not result.face_detected:
+                    if _face_lost_at == 0.0:
+                        _face_lost_at = time.time()
+                    face_lost_elapsed_sec = time.time() - _face_lost_at
+                    face_gone_min = face_lost_elapsed_sec / 60.0
+                    auto_break_remaining_sec = max(0.0, settings.auto_break_minutes * 60.0 - face_lost_elapsed_sec)
+                    if face_gone_min >= settings.auto_break_minutes and not _auto_break_triggered:
+                        _auto_break_triggered = True
+                        # Reset break timer — user is resting
+                        break_timer_start = time.time()
+                        print(f"[AutoBreak] Face undetected for {face_gone_min:.1f}min → rest mode")
+                    auto_break_active = _auto_break_triggered
+                else:
+                    if _auto_break_triggered:
+                        print(f"[AutoBreak] Face detected again → resuming monitoring")
+                    _face_lost_at = 0.0
+                    _auto_break_triggered = False
 
             # Calculate break reminder
             elapsed_min = (time.time() - break_timer_start) / 60.0
@@ -431,11 +777,57 @@ async def _generate_distance_stream() -> AsyncGenerator[dict, None]:
                 and elapsed_min >= settings.break_reminder_interval_min
             )
 
-            # Posture alert
+            # ── Posture analysis (every N seconds) ──
+            now = time.time()
+            posture_interval = settings.posture_check_interval_sec
+            if (
+                posture_analyzer
+                and settings.posture_detection_enabled
+                and result.face_detected
+                and (now - _last_posture_check) >= posture_interval
+            ):
+                _last_posture_check = now
+                try:
+                    p_result = posture_analyzer.analyze(frame)
+
+                    # Save calibration if just finished
+                    if posture_analyzer.calibration.is_calibrated and posture_analyzer.calibration.timestamp > (settings.posture_calibration.get("timestamp", 0) if settings.posture_calibration else 0):
+                        settings.posture_calibration = posture_analyzer.calibration.to_dict()
+                        save_settings(settings)
+
+                    if p_result.detected:
+                        _posture_data = {
+                            "forward_head_ratio": p_result.forward_head_ratio,
+                            "slouch_ratio": p_result.slouch_ratio,
+                            "lateral_tilt_ratio": p_result.lateral_tilt_ratio,
+                            "posture_warning_level": p_result.posture_warning_level,
+                            "posture_message": p_result.posture_message,
+                            "forward_head_warning": p_result.forward_head_warning,
+                            "slouch_warning": p_result.slouch_warning,
+                            "lateral_tilt_warning": p_result.lateral_tilt_warning,
+                            "visibility": round(p_result.visibility, 2),
+                            "landmarks": p_result.landmarks,
+                        }
+
+                        # Posture grace period
+                        raw_p_level = p_result.posture_warning_level
+                        if raw_p_level > 0:
+                            if _posture_grace_start == 0.0:
+                                _posture_grace_start = now
+                            if (now - _posture_grace_start) >= _POSTURE_GRACE_SEC:
+                                _active_posture_level = raw_p_level
+                        else:
+                            _posture_grace_start = 0.0
+                            _active_posture_level = 0
+                    else:
+                        _posture_data = {}
+                        _active_posture_level = 0
+                except Exception as e:
+                    print(f"[Posture] Analysis error: {e}")
+
             posture_alert = (
                 settings.posture_detection_enabled
-                and result.face_detected
-                and result.head_tilt_deg > settings.head_tilt_threshold_deg
+                and _active_posture_level > 0
             )
 
             # ── Grace period logic ──
@@ -444,6 +836,7 @@ async def _generate_distance_stream() -> AsyncGenerator[dict, None]:
             now = time.time()
 
             if raw_level > 0:
+                warning_exited_at = 0.0  # reset exit timer
                 if warning_entered_at == 0.0:
                     # Just entered warning zone — start grace timer
                     warning_entered_at = now
@@ -453,12 +846,23 @@ async def _generate_distance_stream() -> AsyncGenerator[dict, None]:
                     active_alert_level = raw_level
                 # else: still in grace period, keep active_alert_level as-is (0 or previous)
             else:
-                # No warning — reset everything
-                warning_entered_at = 0.0
-                active_alert_level = 0
+                # Distance is safe — but don't reset immediately (cooldown for jitter)
+                if warning_entered_at > 0.0 or active_alert_level > 0:
+                    if warning_exited_at == 0.0:
+                        warning_exited_at = now
+                    # Only fully reset after cooldown period
+                    if (now - warning_exited_at) >= _GRACE_COOLDOWN:
+                        warning_entered_at = 0.0
+                        active_alert_level = 0
+                    # else: keep grace timer running through brief safe dips
 
             # The level sent to clients (respects grace period)
             effective_level = active_alert_level
+
+            # Debug: log warning state periodically
+            if raw_level > 0 or effective_level > 0:
+                grace_elapsed = (now - warning_entered_at) if warning_entered_at > 0 else 0
+                print(f"[Warning] dist={result.distance_cm:.1f}cm raw={raw_level} eff={effective_level} grace={grace_elapsed:.1f}s/{grace_sec}s")
 
             # Track warning history (use effective level, not raw)
             rank_event = None
@@ -529,8 +933,14 @@ async def _generate_distance_stream() -> AsyncGenerator[dict, None]:
                 "grace_remaining": round(grace_remaining, 1),
                 "head_tilt_deg": result.head_tilt_deg,
                 "posture_alert": posture_alert,
+                "posture_warning_level": _active_posture_level,
+                "posture_message": _posture_data.get("posture_message", ""),
+                "posture": _posture_data if _posture_data else None,
                 "needs_break": needs_break,
                 "elapsed_min": round(elapsed_min, 1),
+                "auto_break_active": auto_break_active,
+                "face_lost_elapsed_sec": round(face_lost_elapsed_sec, 1),
+                "auto_break_remaining_sec": round(auto_break_remaining_sec, 1),
                 "timestamp": now,
             }
             if rank_event:

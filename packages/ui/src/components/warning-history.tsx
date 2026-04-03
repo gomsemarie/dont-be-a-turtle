@@ -18,7 +18,7 @@ import {
 } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useRank, useHistoryStats, useHistory, queryKeys } from "@/hooks/use-api";
-import type { PeriodRank } from "@/stores/use-rank-store";
+import type { PeriodRank, TurtleRank } from "@/stores/use-rank-store";
 import { useCelebrationStore } from "@/stores/use-rank-store";
 import { RankImage } from "./rank-image";
 
@@ -36,6 +36,17 @@ const PERIOD_CONFIG: Record<Period, { label: string; days: number; statsLabel: s
   daily:   { label: "오늘",    days: 1,  statsLabel: "오늘" },
   weekly:  { label: "이번 주", days: 7,  statsLabel: "이번 주" },
   monthly: { label: "이번 달", days: 30, statsLabel: "이번 달" },
+};
+
+/** Step label color based on rank level */
+const stepLabelStyle = (level: number): { bg: string; text: string } => {
+  if (level <= -4) return { bg: "bg-red-900/30", text: "text-red-400" };
+  if (level <= -2) return { bg: "bg-red-500/20", text: "text-red-400" };
+  if (level === -1) return { bg: "bg-orange-500/20", text: "text-orange-400" };
+  if (level === 0) return { bg: "bg-zinc-500/20", text: "text-zinc-400" };
+  if (level === 1) return { bg: "bg-blue-500/20", text: "text-blue-400" };
+  if (level <= 3) return { bg: "bg-blue-500/25", text: "text-blue-400" };
+  return { bg: "bg-blue-600/30", text: "text-blue-300" };
 };
 
 /** Selectable rank badge */
@@ -63,7 +74,7 @@ const RankBadge: React.FC<{
         <RankImage rank={r} size="44px" />
       </div>
       <p className="text-[11px] font-bold truncate" style={{ color: r.color }}>{r.name}</p>
-      <p className="text-[9px] font-mono text-muted-foreground">{period.score > 0 ? "+" : ""}{period.score.toFixed(0)}pts</p>
+      <p className="text-[9px] font-mono text-muted-foreground">+{Math.abs(period.score).toFixed(0)}pts</p>
       <div className="h-1 bg-zinc-800 rounded-full overflow-hidden mt-1 mx-1">
         <div
           className="h-full rounded-full transition-all duration-500"
@@ -228,19 +239,24 @@ const WarningHistory: React.FC = () => {
                     <span className="text-lg font-black" style={{ color: activePeriodRank.current.color }}>
                       {activePeriodRank.current.name}
                     </span>
-                    <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-white/10 font-mono" style={{ color: activePeriodRank.current.color }}>
-                      Rank {activePeriodRank.current.level > 0 ? `+${activePeriodRank.current.level}` : activePeriodRank.current.level}
-                    </span>
+                    {(() => {
+                      const sl = stepLabelStyle(activePeriodRank.current.level);
+                      return (
+                        <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium ${sl.bg} ${sl.text}`}>
+                          {activePeriodRank.current.step_label ?? activePeriodRank.current.name}
+                        </span>
+                      );
+                    })()}
                   </div>
                   <p className="text-xs text-muted-foreground mt-0.5">{activePeriodRank.current.description}</p>
                   <div className="mt-2">
                     <div className="flex items-center justify-between text-[10px] mb-1">
                       <span className="font-mono font-bold" style={{ color: activePeriodRank.current.color }}>
-                        {activePeriodRank.score > 0 ? "+" : ""}{activePeriodRank.score.toFixed(0)} pts ({periodCfg.statsLabel})
+                        +{Math.abs(activePeriodRank.score).toFixed(0)} pts ({periodCfg.statsLabel})
                       </span>
                       {activePeriodRank.next && (
                         <span className="text-muted-foreground">
-                          다음: {activePeriodRank.next.name} {activePeriodRank.next.min_score > 0 ? "+" : ""}{activePeriodRank.next.min_score}pts
+                          다음: {activePeriodRank.next.name} +{Math.abs(activePeriodRank.next.min_score)}pts
                         </span>
                       )}
                     </div>
@@ -514,12 +530,12 @@ const ScoringGuide: React.FC = () => {
       {open && (
         <CardContent className="pt-0 pb-4 px-3 space-y-4">
           <div className="space-y-2">
-            <p className="text-xs font-semibold text-muted-foreground">감점 (나쁜 자세)</p>
+            <p className="text-xs font-semibold text-muted-foreground">나쁜 자세 포인트</p>
             <div className="grid grid-cols-3 gap-2 text-center">
               {([
-                { label: "주의 (1단계)", pts: "-1", color: "text-yellow-400" },
-                { label: "경고 (2단계)", pts: "-3", color: "text-orange-400" },
-                { label: "위험 (3단계)", pts: "-8", color: "text-red-400" },
+                { label: "주의 (1단계)", pts: "+1", color: "text-yellow-400" },
+                { label: "경고 (2단계)", pts: "+3", color: "text-orange-400" },
+                { label: "위험 (3단계)", pts: "+8", color: "text-red-400" },
               ] as const).map((item) => (
                 <div key={item.label} className="rounded-md border border-border/50 p-2">
                   <p className={`text-lg font-bold ${item.color}`}>{item.pts}</p>
@@ -530,7 +546,7 @@ const ScoringGuide: React.FC = () => {
           </div>
 
           <div className="space-y-2">
-            <p className="text-xs font-semibold text-muted-foreground">가점 (좋은 자세)</p>
+            <p className="text-xs font-semibold text-muted-foreground">좋은 자세 포인트</p>
             <div className="grid grid-cols-2 gap-2 text-center">
               {([
                 { label: "좋은 자세 1분 유지", pts: "+2", color: "text-emerald-400" },
@@ -547,8 +563,8 @@ const ScoringGuide: React.FC = () => {
           <div className="space-y-1.5">
             <p className="text-xs font-semibold text-muted-foreground">추가 규칙</p>
             <div className="text-[11px] text-muted-foreground space-y-1">
-              <p>• 경고 지속 10초당 <span className="text-red-400 font-medium">-1pt</span> 추가 감점</p>
-              <p>• 매일 점수의 <span className="text-foreground font-medium">5%</span>가 0 방향으로 자연 감소</p>
+              <p>• 경고 지속 10초당 <span className="text-red-400 font-medium">+1pt</span> 추가</p>
+              <p>• 매일 점수의 <span className="text-foreground font-medium">5%</span>가 자연 감소</p>
               <p>• 포인트 배율 설정으로 획득량 조절 가능</p>
             </div>
           </div>
@@ -560,7 +576,7 @@ const ScoringGuide: React.FC = () => {
 
 /** Collapsible rank ladder with detailed card design */
 const RankLadder: React.FC<{
-  allRanks: Array<{ level: number; name: string; emoji: string; image: string; description: string; min_score: number; color: string; bg_gradient: string }>;
+  allRanks: TurtleRank[];
   currentLevel?: number;
 }> = ({ allRanks, currentLevel }) => {
   const [open, setOpen] = useState(false);
@@ -582,6 +598,7 @@ const RankLadder: React.FC<{
         <CardContent className="px-3 pb-3 pt-0 space-y-2">
           {allRanks.map((r) => {
             const isCurrent = r.level === currentLevel;
+            const sl = stepLabelStyle(r.level);
             return (
               <div
                 key={r.level}
@@ -600,12 +617,9 @@ const RankLadder: React.FC<{
                   <RankImage rank={r} size="44px" />
                 </div>
                 <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-1.5">
-                    <span
-                      className="text-[10px] font-mono px-1.5 py-0.5 rounded-full"
-                      style={{ backgroundColor: r.color + "20", color: r.color }}
-                    >
-                      Rank {r.level > 0 ? `+${r.level}` : r.level}
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded-full ${sl.bg} ${sl.text}`}>
+                      {r.step_label ?? r.name}
                     </span>
                     {isCurrent && (
                       <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-primary/20 text-primary font-semibold">
@@ -620,7 +634,7 @@ const RankLadder: React.FC<{
                 </div>
                 <div className="shrink-0 text-right">
                   <span className="text-[10px] font-mono text-muted-foreground">
-                    {r.min_score > 0 ? `+${r.min_score}` : r.min_score}pts
+                    +{Math.abs(r.min_score)}pts
                   </span>
                 </div>
               </div>

@@ -4,6 +4,7 @@
 
 import { Tray, Menu, nativeImage, app } from "electron";
 import path from "path";
+import fs from "fs";
 
 let tray: Tray | null = null;
 let trayActions: TrayActions | null = null;
@@ -19,117 +20,71 @@ interface TrayActions {
 const IS_MAC = process.platform === "darwin";
 
 /**
- * Create a tray icon.
- * macOS: uses a template image (monochrome, system handles dark/light).
- * Others: colored circle with "F" text.
+ * Get path to a resource file, handling both dev and production.
  */
-/**
- * Create a 22×22 (44×44 @2x) PNG tray icon as raw RGBA pixels.
- * macOS template images must be black + alpha only.
- * Draws a cute turtle silhouette.
- */
-function createMacTemplateIcon(): Electron.NativeImage {
-  const s = 44;
-  const buf = Buffer.alloc(s * s * 4, 0);
-
-  const setPixel = (x: number, y: number, a: number) => {
-    if (x < 0 || x >= s || y < 0 || y >= s) return;
-    const i = (y * s + x) * 4;
-    buf[i] = 0;
-    buf[i + 1] = 0;
-    buf[i + 2] = 0;
-    buf[i + 3] = a;
-  };
-
-  const fillCircle = (cx: number, cy: number, r: number, a: number) => {
-    for (let y = cy - r; y <= cy + r; y++) {
-      for (let x = cx - r; x <= cx + r; x++) {
-        const dx = x - cx, dy = y - cy;
-        const dist = Math.sqrt(dx * dx + dy * dy);
-        if (dist <= r) {
-          const edge = Math.max(0, Math.min(1, r - dist + 0.5));
-          setPixel(Math.round(x), Math.round(y), Math.round(a * edge));
-        }
-      }
-    }
-  };
-
-  const fillEllipse = (cx: number, cy: number, rx: number, ry: number, a: number) => {
-    for (let y = cy - ry; y <= cy + ry; y++) {
-      for (let x = cx - rx; x <= cx + rx; x++) {
-        const dx = (x - cx) / rx, dy = (y - cy) / ry;
-        const dist = Math.sqrt(dx * dx + dy * dy);
-        if (dist <= 1) {
-          const edge = Math.max(0, Math.min(1, (1 - dist) * rx * 0.5 + 0.5));
-          setPixel(Math.round(x), Math.round(y), Math.round(a * Math.min(edge, 1)));
-        }
-      }
-    }
-  };
-
-  // Turtle shell (main body ellipse)
-  fillEllipse(22, 22, 14, 11, 200);
-  // Shell highlight (lighter inner ellipse for dome look)
-  fillEllipse(22, 20, 10, 7, 130);
-  // Head (circle poking out right)
-  fillCircle(36, 18, 5, 220);
-  // Eye dot
-  fillCircle(38, 17, 1.2, 0); // cut-out eye (transparent)
-  // Front legs
-  fillEllipse(13, 31, 3, 4, 200);
-  fillEllipse(31, 31, 3, 4, 200);
-  // Back legs
-  fillEllipse(11, 16, 3, 3, 180);
-  fillEllipse(33, 28, 2.5, 3.5, 180);
-  // Tiny tail
-  fillCircle(7, 24, 2, 180);
-
-  const img = nativeImage.createFromBuffer(buf, { width: s, height: s, scaleFactor: 2.0 });
-  img.setTemplateImage(true);
-  return img;
-}
-
-function getTrayIconPath(): string {
+function getResourcePath(filename: string): string {
   const isDev = !app.isPackaged;
   if (isDev) {
-    return path.join(__dirname, "..", "..", "resources", "tray-icon.png");
+    return path.join(__dirname, "..", "..", "resources", filename);
   }
-  // Production: resources are in the app's resource path
-  return path.join(process.resourcesPath, "..", "resources", "tray-icon.png");
+  return path.join(process.resourcesPath, "..", "resources", filename);
 }
 
-function createTrayIcon(color: "green" | "yellow" | "orange" | "red" | "gray"): Electron.NativeImage {
+/**
+ * Create tray icon from the app's pixel-art icon.
+ *
+ * macOS: Uses a black silhouette template image (tray-icon-template.png).
+ *   Template images let macOS automatically handle dark/light mode coloring.
+ *   The 44×44 PNG is loaded as @2x (22pt) for crisp retina display.
+ *
+ * Windows/Linux: Uses a colored icon with dark circle background (tray-icon.png)
+ *   resized to 16×16 for the system tray.
+ */
+function createTrayIcon(): Electron.NativeImage {
   if (IS_MAC) {
-    return createMacTemplateIcon();
+    // macOS: prefer template image (black silhouette, macOS handles coloring)
+    try {
+      const templatePath = getResourcePath("tray-icon-template.png");
+      if (fs.existsSync(templatePath)) {
+        const buf = fs.readFileSync(templatePath);
+        // Create as 22pt @2x for retina
+        const img = nativeImage.createFromBuffer(buf, {
+          width: 44,
+          height: 44,
+          scaleFactor: 2.0,
+        });
+        img.setTemplateImage(true);
+        return img;
+      }
+    } catch { /* fallback */ }
+
+    // Fallback: colored 44x44 icon (non-template)
+    try {
+      const coloredPath = getResourcePath("tray-icon-44.png");
+      if (fs.existsSync(coloredPath)) {
+        const img = nativeImage.createFromPath(coloredPath);
+        if (!img.isEmpty()) {
+          return img.resize({ width: 18, height: 18 });
+        }
+      }
+    } catch { /* fallback */ }
   }
 
-  // Windows / Linux — use rank-10 PNG icon (always visible on any tray background)
+  // Windows / Linux: colored icon with dark background
   try {
-    const iconPath = getTrayIconPath();
+    const iconPath = getResourcePath("tray-icon.png");
     const icon = nativeImage.createFromPath(iconPath);
     if (!icon.isEmpty()) {
       return icon.resize({ width: 16, height: 16 });
     }
-  } catch {
-    // fallback to SVG
-  }
+  } catch { /* fallback */ }
 
-  // Fallback: colored SVG icon
-  const size = 16;
-  const colors: Record<string, string> = {
-    green: "#22c55e",
-    yellow: "#eab308",
-    orange: "#f97316",
-    red: "#ef4444",
-    gray: "#6b7280",
-  };
-
+  // Last resort fallback: simple SVG
   const svg = `
-    <svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 ${size} ${size}">
-      <circle cx="8" cy="8" r="7" fill="${colors[color]}" />
-      <ellipse cx="7.5" cy="8.2" rx="4" ry="3" fill="white" opacity="0.9"/>
-      <circle cx="11" cy="6.5" r="1.8" fill="white" opacity="0.9"/>
-      <circle cx="11.8" cy="6.2" r="0.5" fill="${colors[color]}"/>
+    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16">
+      <circle cx="8" cy="8" r="7" fill="#18181c"/>
+      <ellipse cx="8" cy="8" rx="5" ry="4.5" fill="white" opacity="0.9"/>
+      <circle cx="9.5" cy="7" r="0.7" fill="#18181c"/>
     </svg>
   `;
 
@@ -169,7 +124,7 @@ function buildContextMenu(actions: TrayActions, monitoring: boolean): Menu {
 }
 
 export function createTray(actions: TrayActions): Tray {
-  const icon = createTrayIcon("gray");
+  const icon = createTrayIcon();
   tray = new Tray(icon);
   trayActions = actions;
 
@@ -195,14 +150,6 @@ export function updateTrayMonitoring(active: boolean): void {
 export function updateTrayState(state: "idle" | "safe" | "caution" | "warning" | "danger"): void {
   if (!tray) return;
 
-  const iconMap: Record<string, "green" | "yellow" | "orange" | "red" | "gray"> = {
-    idle: "gray",
-    safe: "green",
-    caution: "yellow",
-    warning: "orange",
-    danger: "red",
-  };
-
   const tooltipMap: Record<string, string> = {
     idle: "거북이 키우기 - 대기 중",
     safe: "거북이 키우기 - 안전 거리",
@@ -211,10 +158,6 @@ export function updateTrayState(state: "idle" | "safe" | "caution" | "warning" |
     danger: "거북이 키우기 - 위험!",
   };
 
-  // macOS: template icon doesn't change color, but update tooltip
-  if (!IS_MAC) {
-    tray.setImage(createTrayIcon(iconMap[state] || "gray"));
-  }
   tray.setToolTip(tooltipMap[state] || "거북이 키우기");
 }
 

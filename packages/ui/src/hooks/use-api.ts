@@ -11,10 +11,12 @@ export const queryKeys = {
   settings: ["settings"] as const,
   cameras: ["cameras"] as const,
   rank: ["rank"] as const,
+  rankConfig: ["rankConfig"] as const,
   version: ["version"] as const,
   history: (days: number) => ["history", days] as const,
   historyStats: (days: number) => ["historyStats", days] as const,
   calibrateStatus: ["calibrateStatus"] as const,
+  updateCheck: ["updateCheck"] as const,
 };
 
 // ─── Settings ────────────────────────────────────────────────
@@ -116,6 +118,26 @@ export function useVersion() {
     queryKey: queryKeys.version,
     queryFn: () => api<{ version: string }>("/api/version"),
     staleTime: 60000,
+  });
+}
+
+export interface UpdateCheckResult {
+  has_update: boolean;
+  current_version: string;
+  latest_version?: string;
+  latest_tag?: string;
+  release_url?: string;
+  release_notes?: string;
+  published_at?: string;
+  error?: string;
+}
+
+export function useUpdateCheck(enabled = true) {
+  return useQuery({
+    queryKey: queryKeys.updateCheck,
+    queryFn: () => api<UpdateCheckResult>("/api/update/check"),
+    staleTime: 1000 * 60 * 30, // 30분마다 재확인
+    enabled,
   });
 }
 
@@ -240,6 +262,53 @@ export function useResetSettings() {
     mutationFn: () => api("/api/settings/reset", { method: "POST" }),
     onSettled: () => {
       qc.invalidateQueries({ queryKey: queryKeys.settings });
+    },
+  });
+}
+
+// ─── Rank Config (Admin) ────────────────────────────────────
+
+export interface RankConfig {
+  ranks: Array<{
+    level: number;
+    name: string;
+    step_label?: string;
+    emoji: string;
+    image?: string;
+    description: string;
+    min_score: number;
+    color: string;
+    bg_gradient: string;
+  }>;
+  scoring_rules: {
+    penalty: { level_1_base: number; level_2_base: number; level_3_base: number; duration_multiplier: number };
+    reward: { good_posture_per_min: number };
+    daily_bonus: { zero_warning_day: number };
+    decay: { daily_decay_rate: number };
+    score_period_days: number;
+    [key: string]: any;
+  };
+}
+
+export function useRankConfig() {
+  return useQuery({
+    queryKey: queryKeys.rankConfig,
+    queryFn: () => api<RankConfig>("/api/rank/config"),
+    staleTime: 60000,
+  });
+}
+
+export function useUpdateRankConfig() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (config: Partial<RankConfig>) =>
+      api("/api/rank/config", {
+        method: "PUT",
+        body: JSON.stringify(config),
+      }),
+    onSettled: () => {
+      qc.invalidateQueries({ queryKey: queryKeys.rankConfig });
+      qc.invalidateQueries({ queryKey: queryKeys.rank });
     },
   });
 }
