@@ -49,6 +49,45 @@ from posture import PostureAnalyzer, PostureCalibration
 from turtle_rank import get_full_rank_info, load_ranks, load_scoring_rules, reset_score_state, add_good_posture_time
 
 
+# ─── Version migration: clear data on version change ─────────
+def _check_version_migration():
+    """If the app version changed since last run, wipe user data so fresh defaults apply."""
+    data_dir = get_config_path().parent
+    version_file = data_dir / ".app_version"
+
+    prev_version = ""
+    if version_file.exists():
+        try:
+            prev_version = version_file.read_text(encoding="utf-8").strip()
+        except Exception:
+            pass
+
+    if prev_version != APP_VERSION:
+        print(f"[Migration] 버전 변경 감지: {prev_version or '(없음)'} → {APP_VERSION}, 데이터 초기화")
+        # Remove user data files (settings, history, scores, rank/scoring overrides)
+        for fname in [
+            "settings.json",
+            "warning_history.json",
+            "turtle_score.json",
+            "turtle_ranks.json",
+            "scoring_rules.json",
+        ]:
+            target = data_dir / fname
+            if target.exists():
+                try:
+                    target.unlink()
+                    print(f"  삭제: {fname}")
+                except Exception as e:
+                    print(f"  삭제 실패: {fname} ({e})")
+        # Write current version
+        try:
+            version_file.write_text(APP_VERSION, encoding="utf-8")
+        except Exception:
+            pass
+
+_check_version_migration()
+
+
 # Global instances
 camera_manager = CameraManager()
 face_detector = FaceDetector()
