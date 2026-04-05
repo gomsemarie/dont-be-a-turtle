@@ -52,7 +52,8 @@ from turtle_rank import get_full_rank_info, load_ranks, load_scoring_rules, rese
 # ─── Version migration: clear data on version change ─────────
 def _check_version_migration():
     """If the app version changed since last run, wipe user data so fresh defaults apply."""
-    data_dir = get_config_path().parent
+    from config import get_config_dir
+    data_dir = get_config_dir()
     version_file = data_dir / ".app_version"
 
     prev_version = ""
