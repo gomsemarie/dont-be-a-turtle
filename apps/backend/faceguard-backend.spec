@@ -39,6 +39,8 @@ a = Analysis(
         'starlette',
         'anyio',
         'anyio._backends._asyncio',
+        'multipart',
+        'multipart.multipart',
     ] + collect_submodules('mediapipe'),
     hookspath=[],
     hooksconfig={},

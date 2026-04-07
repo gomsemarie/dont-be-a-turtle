@@ -137,5 +137,18 @@ jobs:
             release/*.dmg
             release/*.exe
           generate_release_notes: true
+          body: |
+            ## 설치 방법
+
+            ### Windows
+            `.exe` 파일을 다운로드하여 실행하면 설치됩니다.
+
+            ### macOS
+            `.dmg` 파일을 다운로드하여 앱을 Applications 폴더로 드래그합니다.
+
+            **"손상되었습니다" 경고가 나오면** 터미널에서 아래 명령어를 실행해주세요:
+            ```
+            xattr -cr /Applications/Dont\ Be\ A\ Turtle.app
+            ```
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
